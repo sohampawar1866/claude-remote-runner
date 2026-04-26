@@ -29,7 +29,7 @@ if (isBackendConfigured) {
         .setProject(APPWRITE_PROJECT_ID);
 }
 
-const databases = isBackendConfigured ? new Databases(client) : null;
+export const databases = isBackendConfigured ? new Databases(client) : null;
 
 export async function logPromptToAppwrite(channelId, promptText, encryptionKey, type = 'prompt') {
   if (!isBackendConfigured) return;

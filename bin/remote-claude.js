@@ -10,6 +10,7 @@ import { sendNtfyAlert } from '../src/services/ntfy.js';
 import { startKeepAwake, stopKeepAwake } from '../src/utils/keepawake.js';
 import { PauseDetector, STATE } from '../src/detection/index.js';
 import { installHook, watchStateFile } from '../src/detection/hookSetup.js';
+import { createWebRTCSession } from '../src/services/webrtc.js';
 import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 import os from 'os';
@@ -177,9 +178,25 @@ console.log('\x1b[36m[remote-claude] Active Session URL:\x1b[39m');
 const sessionUrl = `${frontendUrl}/?c=${channelId}&k=${encryptionKey}`;
 console.log(`\x1b[36m${sessionUrl}\x1b[39m\n`);
 
+let webrtcChannel = null;
+
 if (isBackendConfigured) {
-  qrcode.generate(sessionUrl, { small: true });
-  pollForPairing(channelId);
+  createWebRTCSession(channelId, encryptionKey, frontendUrl)
+    .then(({ peer, dataChannel }) => {
+      webrtcChannel = dataChannel;
+      
+      dataChannel.onMessage((msg) => {
+        const text = msg.toString();
+        ptyProcess.write(`${text}\r`);
+        if (isWaitingForRemote) cancelRemoteWait();
+        detector.userResponded();
+      });
+    })
+    .catch(err => {
+      console.error('\x1b[31m[WebRTC] Failed to initialize P2P tunnel. Falling back to polling.\x1b[39m');
+      qrcode.generate(sessionUrl, { small: true });
+      pollForPairing(channelId);
+    });
 }
 
 // Extract the base command and any additional arguments
@@ -311,9 +328,16 @@ ptyProcess.onData((data) => {
   process.stdout.write(data);
 
   // Feed every chunk into the PauseDetector.
-  // The detector handles buffering, pattern matching, silence tracking,
-  // and state machine transitions internally.
   detector.feedData(data);
+
+  // Stream output to WebRTC if connected (Phase 2 Live Mirroring)
+  if (webrtcChannel && webrtcChannel.isOpen()) {
+    try {
+      webrtcChannel.sendMessage(data);
+    } catch (e) {
+      // ignore
+    }
+  }
 });
 
 // ── Pass user input to the PTY ───────────────────────────────────
