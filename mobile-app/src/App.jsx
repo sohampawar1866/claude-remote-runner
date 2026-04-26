@@ -1,0 +1,144 @@
+import React from 'react';
+import { useRemoteSession } from './hooks/useRemoteSession';
+import PromptList from './components/PromptList';
+import ChatInput from './components/ChatInput';
+
+/* ─── Icons ───────────────────────────────────────────────────── */
+function LockIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  );
+}
+
+function TerminalIcon({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 17 10 11 4 5"/>
+      <line x1="12" y1="19" x2="20" y2="19"/>
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="12" r="9"/>
+    </svg>
+  );
+}
+
+/* ─── No Session Screen ───────────────────────────────────────── */
+function NoSessionScreen() {
+  return (
+    <div className="no-session">
+      <div className="no-session-card">
+        <div className="no-session-icon">
+          <img src="/logo.png" alt="Remote Claude" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+        </div>
+        <h1 className="no-session-title">No Active Session</h1>
+        <p className="no-session-desc">
+          Open a secure session from your terminal to get started.
+        </p>
+
+        <div className="no-session-step">
+          <div className="step-num">1</div>
+          <div className="step-text">
+            Run <span className="code-pill">remote-claude</span> in your terminal
+          </div>
+        </div>
+
+        <div className="no-session-step">
+          <div className="step-num">2</div>
+          <div className="step-text">
+            Open the secure link printed in your terminal - it contains your encrypted session key
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main App ────────────────────────────────────────────────── */
+export default function App() {
+  const { sessionId, prompts, isDisconnected, isSending, sendRemoteResponse } = useRemoteSession();
+
+  if (!sessionId) {
+    return <NoSessionScreen />;
+  }
+
+  const hasPrompts = prompts.length > 0;
+
+  return (
+    <div className="app">
+      {/* Header */}
+      <header className="header">
+        <div className="header-brand">
+          <div className="header-logo">
+            <img src="/logo.png" alt="Remote Claude" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+          </div>
+          <div>
+            <div className="header-title">Claude Remote</div>
+            <div className="header-status">
+              <div className={`status-dot ${isDisconnected ? 'offline' : ''}`} />
+              <span className="status-label">
+                {isDisconnected ? 'Session ended' : 'E2E Encrypted · Connected'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="header-actions">
+          {isDisconnected && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-secondary)' }}>
+              <StopIcon />
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Content */}
+      <div className="content-area">
+        {/* Waiting / empty state */}
+        {!hasPrompts && !isDisconnected && (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <TerminalIcon size={30} />
+            </div>
+            <div>
+              <div className="empty-state-title">Waiting for Claude…</div>
+              <p className="empty-state-sub">
+                When Claude pauses for your input, the prompt will appear here instantly.
+              </p>
+            </div>
+            <div className="spinner" />
+          </div>
+        )}
+
+        {/* Prompt Cards */}
+        <PromptList prompts={prompts} />
+
+        {/* Disconnected Banner */}
+        {isDisconnected && (
+          <div className="disconnected-banner">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            The terminal session has ended. You can close this window.
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <ChatInput
+        onSend={sendRemoteResponse}
+        isSending={isSending}
+        disabled={isDisconnected}
+      />
+    </div>
+  );
+}

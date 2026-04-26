@@ -1,0 +1,43 @@
+{
+  "name": "@sohampawar1866/remote-claude",
+  "version": "1.4.0",
+  "description": "A wrapper for Claude Code to enable remote interactions, via push notifications and a mobile PWA",
+  "main": "bin/remote-claude.js",
+  "bin": {
+    "remote-claude": "bin/remote-claude.js"
+  },
+  "scripts": {
+    "start": "node bin/remote-claude.js",
+    "dev": "node bin/remote-claude.js -c node -- src/simulator.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "postinstall": "node postinstall.cjs"
+  },
+  "keywords": [
+    "claude",
+    "ai",
+    "remote",
+    "cli",
+    "pty",
+    "notifications",
+    "mobile"
+  ],
+  "author": "sohampawar1866",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "dependencies": {
+    "appwrite": "^24.2.0",
+    "commander": "^14.0.3",
+    "dotenv": "^17.4.2",
+    "node-pty": "^1.1.0",
+    "qrcode-terminal": "^0.12.0",
+    "strip-ansi": "^7.2.0"
+  }
+}

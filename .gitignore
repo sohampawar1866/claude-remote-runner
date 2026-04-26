@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+mobile-app/node_modules/
+
+# Environment variables (contain secrets)
+.env
+mobile-app/.env
+
+# Build output
+mobile-app/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Internal planning docs (not part of open-source release)
+claude_remote_runner.md
+detailed_implementation_plan.md
+
+# Editor
+*.swp
+*.swo
+.vscode/
+.idea/
