@@ -1,6 +1,6 @@
 {
   "name": "@sohampawar1866/remote-claude",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "A wrapper for Claude Code to enable remote interactions, via push notifications and a mobile PWA",
   "main": "bin/remote-claude.js",
   "bin": {

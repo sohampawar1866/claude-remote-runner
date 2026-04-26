@@ -8,6 +8,8 @@ import { getOrGenerateConfig } from '../src/config/index.js';
 import { logPromptToAppwrite, fetchResponseFromAppwrite, isBackendConfigured, pollForPairing, FRONTEND_URL } from '../src/services/appwrite.js';
 import { sendNtfyAlert } from '../src/services/ntfy.js';
 import { startKeepAwake, stopKeepAwake } from '../src/utils/keepawake.js';
+import { PauseDetector, STATE } from '../src/detection/index.js';
+import { installHook, watchStateFile } from '../src/detection/hookSetup.js';
 import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 import os from 'os';
@@ -117,7 +119,7 @@ const program = new Command();
 program
   .name('remote-claude')
   .description('A CLI wrapper for Claude Code to enable remote interactions')
-  .version('1.4.1');
+  .version('1.5.0');
 
 program
   .command('doctor')
@@ -147,6 +149,10 @@ program
   .description('Start the Claude remote runner (default)')
   .option('-c, --command <cmd>', 'Command to run', 'claude')
   .option('-k, --keep-awake', 'Prevent the system from sleeping while running')
+  .option('-d, --debug', 'Enable debug logging for pause detection')
+  .option('--silence-threshold <ms>', 'Silence threshold in ms before fallback pause detection', '3000')
+  .option('--pattern-debounce <ms>', 'Pattern match debounce in ms', '1500')
+  .option('--no-hooks', 'Disable automatic Claude Code hook installation')
   .argument('[args...]', 'Arguments to pass to the command')
   .action((args, options) => {
     startRunner(args, options);
@@ -237,66 +243,88 @@ try {
   }
 }
 
-// Buffer to hold output for detection
-let outputBuffer = '';
-let pauseTimeout = null;
-const PAUSE_THRESHOLD_MS = 1500; // Time to wait after detecting a prompt pattern
+// ─── Pause Detection Engine ──────────────────────────────────────
+// Replaces the old 3-regex approach with a 4-layer hybrid system:
+//   Layer 1: Hook-based IPC (optional, highest reliability)
+//   Layer 2: Expanded pattern matching (15+ patterns from CCManager)
+//   Layer 3: Silence-based fallback (universal safety net)
+//   Layer 4: State machine (context tracking)
+// ─────────────────────────────────────────────────────────────────
 
-// Regex patterns to match Claude Code's interactive prompts
-// e.g. "? Do you want to run this command? (Y/n)" or "> "
-const PROMPT_PATTERNS = [
-  /(?:\?.*\(Y\/n\).*|[>❯]\s*)$/i, // Basic Yes/No or prompt (including heavy chevron)
-  /^\s*\d+\.\s+.*$/i,             // Numbered menu options (e.g. "7. Light mode")
-  /Press Enter to continue/i      // General continue prompts
-];
+let isWaitingForRemote = false;
+let pollingInterval = null;
+let hookCleanup = null;
+let hookWatchCleanup = null;
+
+// Initialize the PauseDetector with configurable thresholds
+const detector = new PauseDetector({
+  silenceThresholdMs: parseInt(options.silenceThreshold, 10) || 3000,
+  patternDebounceMs: parseInt(options.patternDebounce, 10) || 1500,
+  debug: options.debug || false,
+
+  // Called when Claude is confirmed paused and waiting for input
+  onPause: (buffer) => {
+    onClaudePaused(buffer);
+  },
+
+  // Called when Claude resumes after user responds
+  onResume: () => {
+    if (options.debug) console.log('\x1b[90m[PauseDetector] Claude resumed.\x1b[39m');
+  },
+
+  // Called on every state transition
+  onStateChange: (newState, oldState) => {
+    if (options.debug) {
+      console.log(`\x1b[90m[PauseDetector] ${oldState} → ${newState}\x1b[39m`);
+    }
+  },
+});
+
+// ── Layer 1: Hook-Based IPC (optional) ───────────────────────────
+// Install Claude Code lifecycle hooks for the most reliable detection.
+// Falls back gracefully if hooks can't be installed.
+if (options.hooks !== false) {
+  const hookResult = installHook(channelId);
+  if (hookResult) {
+    hookCleanup = hookResult.cleanup;
+
+    // Watch the state file for hook signals
+    hookWatchCleanup = watchStateFile(hookResult.stateFilePath, (signal) => {
+      if (options.debug) {
+        console.log(`\x1b[90m[Hook] Received signal: ${signal}\x1b[39m`);
+      }
+      if (signal === 'Notification' || signal === 'Stop') {
+        // Claude has stopped or is waiting — force a pause check
+        detector.forceTransition(STATE.PAUSED);
+      }
+    });
+  }
+}
 
 // Handle terminal resizing
 process.stdout.on('resize', () => {
   ptyProcess.resize(process.stdout.columns, process.stdout.rows);
 });
 
-// Pipe PTY output to the real terminal
+// ── Pipe PTY output to the real terminal + feed the detector ─────
 ptyProcess.onData((data) => {
   process.stdout.write(data);
-  
-  // Accumulate data
-  outputBuffer += data;
-  
-  // Clear any existing timeout since we are receiving new data
-  if (pauseTimeout) {
-    clearTimeout(pauseTimeout);
-    pauseTimeout = null;
-  }
-  
-  // Check if the current buffer ends with a prompt pattern
-  const stripped = stripAnsi(outputBuffer);
-  
-  // We only check the end of the buffer (or the last few lines)
-  const lines = stripped.split('\n');
-  const lastLine = lines[lines.length - 1] || '';
-  
-  const isMatch = PROMPT_PATTERNS.some((pattern) => pattern.test(lastLine.trimEnd()));
-  
-  if (isMatch) {
-    // If it looks like a prompt, wait a bit to see if Claude is actually paused
-    pauseTimeout = setTimeout(() => {
-      onClaudePaused(outputBuffer);
-    }, PAUSE_THRESHOLD_MS);
-  }
-  
-  // Keep buffer size manageable
-  if (outputBuffer.length > 10000) {
-    outputBuffer = outputBuffer.slice(-5000);
-  }
+
+  // Feed every chunk into the PauseDetector.
+  // The detector handles buffering, pattern matching, silence tracking,
+  // and state machine transitions internally.
+  detector.feedData(data);
 });
 
-// Pass user input to the PTY
+// ── Pass user input to the PTY ───────────────────────────────────
 process.stdin.on('data', (data) => {
   ptyProcess.write(data);
   // If we were waiting for remote input, cancel it because the user typed locally
   if (isWaitingForRemote) {
     cancelRemoteWait();
   }
+  // Tell the detector the user has responded
+  detector.userResponded();
 });
 
 // Raw mode allows intercepting keystrokes without needing Enter
@@ -305,32 +333,31 @@ if (process.stdin.isTTY) {
 }
 process.stdin.resume();
 
-let isWaitingForRemote = false;
-let pollingInterval = null;
-
+// ── Pause Handler ────────────────────────────────────────────────
 function onClaudePaused(buffer) {
   isWaitingForRemote = true;
-  
+
   // Clean up prompt text for the push notification
   const cleanBuffer = stripAnsi(buffer).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-  // Grab the last 5 lines for context so the notification shows the actual question asked
+  // Grab the last 8 lines for context so the notification shows the actual question asked
   const lines = cleanBuffer.split('\n');
-  const contextLines = lines.slice(Math.max(lines.length - 5, 0)).join('\n');
-  
+  const contextLines = lines.slice(Math.max(lines.length - 8, 0)).join('\n');
+
   // Trigger Phase 2 Backend Sync
   sendNtfyAlert(config.ntfyTopic, 'Claude Needs Input', 'Tap here to securely view the prompt and respond.', channelId, encryptionKey, frontendUrl, isBackendConfigured);
-  logPromptToAppwrite(channelId, contextLines, encryptionKey); 
+  logPromptToAppwrite(channelId, contextLines, encryptionKey);
 
   // Start polling Appwrite for a response
   if (!pollingInterval) {
     pollingInterval = setInterval(async () => {
       if (!isWaitingForRemote) return;
-      
+
       const response = await fetchResponseFromAppwrite(channelId, encryptionKey);
       if (response !== null) {
         // We got a response from the mobile app!
         ptyProcess.write(`${response}\r`);
         cancelRemoteWait();
+        detector.userResponded();
       }
     }, 1000); // Poll every 1 second
   }
@@ -344,10 +371,13 @@ function cancelRemoteWait() {
   }
 }
 
-// Handle exit - notify the mobile app that this session is done
+// ── Handle exit — clean up hooks and notify mobile ──────────────
 ptyProcess.onExit(async ({ exitCode, signal }) => {
   cancelRemoteWait();
+  detector.destroy();
   stopKeepAwake();
+  if (hookCleanup) hookCleanup();
+  if (hookWatchCleanup) hookWatchCleanup();
   await logPromptToAppwrite(channelId, '[remote-claude] Process exited.', encryptionKey, 'disconnect');
   process.exit(exitCode);
 });

@@ -13,10 +13,6 @@ mobile-app/dist/
 .DS_Store
 Thumbs.db
 
-# Internal planning docs (not part of open-source release)
-claude_remote_runner.md
-detailed_implementation_plan.md
-
 # Editor
 *.swp
 *.swo

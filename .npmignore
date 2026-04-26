@@ -1,5 +1,26 @@
-claude_remote_runner.md
-detailed_implementation_plan.md
+# Development files
 .env
-mobile-app/node_modules
+.env.example
+
+# Dependencies
 node_modules
+mobile-app/node_modules
+
+
+
+# Build output
+mobile-app/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Git
+.git
+.gitignore

@@ -11,7 +11,8 @@ A cross-platform CLI wrapper and Progressive Web App (PWA) that lets you control
 
 ## Features
 
-- **Remote Control** - Get push notifications whenever Claude is paused (approval prompts, lint errors, etc.) and respond from your phone.
+- **Reliable Pause Detection** - 4-layer hybrid detection engine with 15+ patterns, prompt box structural parsing, Claude Code lifecycle hooks, silence-based fallback, and a state machine to prevent false positives.
+- **Remote Control** - Get push notifications whenever Claude is paused (approval prompts, questions, tool permissions, etc.) and respond from your phone.
 - **End-to-End Encryption** - All messages are encrypted with AES-256-GCM before leaving your machine. Nobody can read your prompts - not even the database host.
 - **Cross-Platform Keep-Awake** - Prevents your Mac, Windows, or Linux machine from sleeping during long-running tasks.
 - **Installable PWA** - A mobile frontend you can add to your home screen on iOS or Android for quick access.
@@ -33,21 +34,42 @@ To start a remote session, simply run:
 remote-claude
 ```
 
-To keep your computer awake while Claude runs, use the `-k` flag:
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `-k, --keep-awake` | Prevent the system from sleeping while Claude runs |
+| `-d, --debug` | Enable debug logging for pause detection state transitions |
+| `--silence-threshold <ms>` | Silence threshold in ms before fallback pause detection (default: `3000`) |
+| `--pattern-debounce <ms>` | Pattern match debounce in ms (default: `1500`) |
+| `--no-hooks` | Disable automatic Claude Code hook installation |
+| `-c, --command <cmd>` | Command to run (default: `claude`) |
+
+### Examples
 
 ```bash
+# Basic usage — keep machine awake
 remote-claude -k
+
+# Debug mode — see state transitions in real time
+remote-claude -d
+
+# Custom thresholds — more conservative detection
+remote-claude --silence-threshold 5000 --pattern-debounce 2000
+
+# Without hooks — rely only on terminal output parsing
+remote-claude --no-hooks
 ```
 
 On first launch, the CLI generates a secure URL. Open it on your phone to pair for that session.
 
 ## Architecture & Security
 
-Security is a core concern for this tool. See the full **[Security Architecture Guide (SECURITY.md)](./SECURITY.md)** for details on the zero-trust model.
+Security is a core concern for this tool. See the full **[Security Architecture Guide](./docs/SECURITY.md)** for details on the zero-trust model.
 
 Here is how it works:
 
-1. `remote-claude` wraps the `claude` CLI using `node-pty` and monitors terminal output.
+1. `remote-claude` wraps the `claude` CLI using `node-pty` and monitors terminal output with a multi-layered detection engine.
 2. When Claude pauses for input, the CLI generates a random `channelId` and AES `encryptionKey`.
 3. The prompt is **encrypted locally** and synced to your [Appwrite](https://appwrite.io/) database.
 4. A push notification is sent to your phone with a URL like: `https://remote-claude.shaniai.tech/?c=<channelId>&k=<encryptionKey>`.
@@ -55,24 +77,41 @@ Here is how it works:
 
 The `encryptionKey` is passed through the URL and never stored on the backend. Nobody - not even the database admin - can read your prompts.
 
+### Pause Detection Engine
+
+The v1.5.0 detection system uses a 4-layer hybrid architecture:
+
+| Layer | Method | Reliability |
+|-------|--------|-------------|
+| **1. Hook-Based IPC** | Auto-installs Claude Code lifecycle hooks (`Notification`, `Stop`) for direct state signals | Highest — zero regex needed |
+| **2. Pattern Matching** | 15+ patterns derived from [CCManager](https://github.com/kbwo/ccmanager): approval prompts, permission dialogs, numbered menus, prompt box borders | High — covers all known Claude Code v2.x prompt formats |
+| **3. Silence Fallback** | If no output for a configurable threshold and no busy indicators detected, triggers a pause check | Medium — universal safety net for unknown prompt formats |
+| **4. State Machine** | Tracks `idle → busy → paused` transitions with debouncing to prevent false positives from screen redraws or stale scrollback | Context — prevents duplicate notifications and false transitions |
+
 ## Project Structure
 
 ```
 claude-remote-runner/
-├── bin/                     # CLI entry point
-│   └── remote-claude.js     # Main executable (node-pty wrapper)
-├── docs/                    # Documentation and security logic
-├── src/                     # CLI source modules
-│   ├── config/              # Configuration logic
-│   ├── services/            # Appwrite sync and Ntfy integration
-│   └── utils/               # Crypto logic and keep-awake
-├── mobile-app/              # Self-contained PWA (deploy separately)
+├── bin/                         # CLI entry point
+│   └── remote-claude.js         # Main executable (node-pty wrapper)
+├── docs/                        # Documentation
+│   └── SECURITY.md              # Security architecture guide
+├── src/                         # CLI source modules
+│   ├── config/                  # Configuration and defaults
+│   ├── detection/               # Pause detection engine (v1.5.0)
+│   │   ├── PauseDetector.js     # Core state machine + 4-layer engine
+│   │   ├── patterns.js          # Pattern catalog + prompt box parsing
+│   │   ├── hookSetup.js         # Claude Code lifecycle hook integration
+│   │   └── index.js             # Barrel export
+│   ├── services/                # Appwrite sync and ntfy notifications
+│   └── utils/                   # Crypto and keep-awake utilities
+├── mobile-app/                  # Self-contained PWA (deploy separately)
 │   ├── src/
-│   │   ├── components/      # React UI components
-│   │   ├── hooks/           # Custom React hooks
-│   │   ├── services/        # Appwrite client + WebCrypto
-│   │   └── App.jsx          # Root component
-│   └── vercel.json          # Vercel deployment config
+│   │   ├── components/          # React UI components
+│   │   ├── hooks/               # Custom React hooks
+│   │   ├── services/            # Appwrite client + WebCrypto
+│   │   └── App.jsx              # Root component
+│   └── vercel.json              # Vercel deployment config
 ├── LICENSE
 ├── README.md
 └── package.json
@@ -131,7 +170,8 @@ VITE_APPWRITE_COLLECTION_ID=your_collection_id
 
 ## Tech Stack
 
-- **CLI Wrapper**: Node.js, `node-pty`, `strip-ansi`
+- **CLI Wrapper**: Node.js, `node-pty`, `strip-ansi`, `commander`
+- **Pause Detection**: Custom 4-layer engine (hooks + pattern matching + silence fallback + state machine)
 - **Mobile App**: React, Vite, Pure CSS (Custom Design System), `vite-plugin-pwa`
 - **Backend & Sync**: Appwrite (Serverless Database & Realtime API)
 - **Push Notifications**: ntfy.sh
@@ -148,7 +188,7 @@ npm uninstall -g @sohampawar1866/remote-claude
 
 ## Looking to Collaborate
 
-Right now, Claude Remote Runner works by wrapping the CLI in a pseudo-terminal and parsing its output to detect when the agent is waiting for input. It works - but it is an external wrapper, not a native integration.
+Right now, Claude Remote Runner works by wrapping the CLI in a pseudo-terminal and monitoring its output with a production-grade detection engine. The v1.5.0 detection system integrates with Claude Code's lifecycle hooks for the highest reliability, with pattern matching and silence-based fallbacks for universal coverage.
 
 A direct integration inside an AI-powered IDE (like Cursor, Windsurf, or similar) would be a much better experience: instant pause detection, direct reply injection, and no setup for end users. The encryption layer, real-time sync, mobile PWA, and push notifications are all production-ready and transport-agnostic - they can plug into any agent framework, not just Claude Code.
 
