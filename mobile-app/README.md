@@ -8,7 +8,7 @@ This frontend is designed to be completely stateless and relies solely on End-to
 - The `encryptionKey` is parsed directly from the URL.
 - Messages pulled from Appwrite are decrypted entirely in the browser using the Web Crypto API (`AES-256-GCM`).
 - Responses are encrypted before being pushed back to Appwrite.
-- No sensitive data is ever stored persistently in the database or local storage.
+- The session credentials are stored transiently in the browser's `localStorage` to allow you to close and reopen the app or add it to your Home Screen. These are automatically wiped the moment the terminal session ends.
 
 ## Development
 

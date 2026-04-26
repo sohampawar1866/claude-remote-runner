@@ -8,7 +8,7 @@ All prompt data is encrypted with **AES-256-GCM** before it leaves your machine.
 
 Here is exactly what happens:
 
-1. **Local Key Generation:** The CLI generates a cryptographically random 128-bit `encryptionKey` and a random UUID `channelId`.
+1. **Local Key Generation:** The CLI generates a cryptographically random 256-bit `encryptionKey` and a random UUID `channelId`.
 2. **Local Encryption:** When Claude pauses for input, the CLI captures the prompt and encrypts it using `crypto.createCipheriv('aes-256-gcm')` on your machine.
 3. **Encrypted Sync:** Only the encrypted ciphertext and the `channelId` are sent to Appwrite. **The `encryptionKey` never leaves your machine or touches the backend.**
 4. **Push Notification:** A notification is sent via `ntfy.sh` containing a deep link: `https://remote-claude.shaniai.tech/?c=<channelId>&k=<encryptionKey>`. The key is delivered directly to your device through the URL.
@@ -17,7 +17,7 @@ Here is exactly what happens:
 
 ### What this means in practice
 
-Even if your Appwrite database is public, compromised, or hosted by someone you don't trust, **nobody can read your prompts or inject responses into your terminal**. Without the `encryptionKey` (which only exists in your terminal's memory and your phone's browser tab), the stored data is unreadable.
+Even if your Appwrite database is public, compromised, or hosted by someone you don't trust, **nobody can read your prompts or inject responses into your terminal**. Without the `encryptionKey` (which only exists in your terminal's memory and your phone's browser session/local storage), the stored data is unreadable.
 
 ## 2. Zero-Config Shared Backend
 
