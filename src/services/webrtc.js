@@ -2,7 +2,6 @@ import { PeerConnection } from 'node-datachannel';
 import qrcode from 'qrcode-terminal';
 import { databases, MESSAGES_COLLECTION_ID, DATABASE_ID, subscribeToCollection } from './appwrite.js';
 import { encryptText, decryptText } from '../utils/crypto.js';
-import { Query } from 'appwrite';
 
 /**
  * Initiates a WebRTC pairing flow with the mobile device.

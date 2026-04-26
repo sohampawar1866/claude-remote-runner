@@ -147,13 +147,15 @@ export function useWebRTC(sessionId, encryptionKey, isWebRTCSession) {
       }
     };
 
+    const handleOrientationChange = () => setTimeout(handleResize, 200);
+
     window.addEventListener('resize', handleResize);
     // Also handle orientation changes on mobile
-    window.addEventListener('orientationchange', () => setTimeout(handleResize, 200));
+    window.addEventListener('orientationchange', handleOrientationChange);
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
+      window.removeEventListener('orientationchange', handleOrientationChange);
     };
   }, [isWebRTCSession]);
 

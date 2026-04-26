@@ -94,43 +94,6 @@ export function subscribeToResponses(channelId, encryptionKey, onResponse) {
   });
 }
 
-export async function fetchResponseFromAppwrite(channelId, encryptionKey) {
-  if (!isBackendConfigured) return null;
-  try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      MESSAGES_COLLECTION_ID,
-      [
-        Query.equal('sessionId', channelId),
-        Query.equal('type', 'response'),
-        Query.orderAsc('$createdAt'),
-        Query.limit(10) // fetch up to 10 in case of spam
-      ]
-    );
-    
-    if (response.documents.length > 0) {
-      let validResponse = null;
-      
-      for (const doc of response.documents) {
-        // Always delete to clear queue (including garbage/spam)
-        await databases.deleteDocument(DATABASE_ID, MESSAGES_COLLECTION_ID, doc.$id).catch(() => {});
-        
-        if (!validResponse) {
-          const decrypted = encryptionKey ? decryptText(doc.content, encryptionKey) : doc.content;
-          if (decrypted !== null) {
-            validResponse = decrypted;
-          }
-        }
-      }
-      
-      return validResponse;
-    }
-  } catch {
-    // Fail silently during polling
-  }
-  return null;
-}
-
 export async function pollForPairing(channelId) {
   if (!isBackendConfigured) return;
   const pairInterval = setInterval(async () => {

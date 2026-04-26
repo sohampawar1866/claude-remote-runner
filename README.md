@@ -14,10 +14,15 @@ A cross-platform CLI wrapper and Progressive Web App (PWA) that lets you control
 - **Live Terminal Mirroring (WebRTC)** - Watch Claude's output stream in real-time directly on your phone with zero latency over a secure peer-to-peer data channel.
 - **Rich UI Parsing** - The mobile dashboard automatically parses raw ANSI streams into beautiful, native markdown and code blocks, fully preserving terminal colors.
 - **Instant QR Pairing** - Simply scan the QR code printed in your terminal to instantly establish a WebRTC connection. No manual URL copying required.
+- **Late Joiner History Burst** - If you scan the QR code after Claude has been running for a while, you immediately receive the full terminal history so you never miss context.
+- **Adaptive PTY Resizing** - The mobile app automatically sends your phone's screen dimensions to the CLI, which resizes the pseudo-terminal for a pixel-perfect mobile view.
+- **Auto-Reconnect** - If your phone goes to sleep or loses network, the app automatically renegotiates a new WebRTC tunnel when it wakes up.
 - **Reliable Pause Detection** - 4-layer hybrid detection engine with prompt box structural parsing, Claude Code lifecycle hooks, silence-based fallback, and a state machine.
+- **Appwrite Realtime Sync** - All signaling and fallback messaging uses Appwrite WebSocket subscriptions for instant delivery with zero polling overhead.
 - **Remote Control & Push Notifications** - Get alerted via ntfy.sh whenever Claude pauses (e.g., approval prompts, tool permissions) and respond from your phone.
 - **Zero-Trust Security** - All peer-to-peer connections and signaling data are secured with AES-256-GCM encryption. Nobody can read your code.
 - **Cross-Platform Keep-Awake** - Prevents your Mac, Windows, or Linux machine from sleeping during long-running tasks.
+- **PWA Home Screen Support** - Session credentials are persisted to `localStorage`, so the app works even when launched from your iOS/Android home screen (which strips URL parameters).
 
 ## Installation
 
@@ -66,11 +71,27 @@ Here is how the v3.0.0 pipeline works:
 
 1. `remote-claude` wraps the `claude` CLI using `node-pty` and monitors terminal output.
 2. The CLI generates a random `channelId` and AES `encryptionKey`.
-3. It prints a **QR Code** containing these credentials to your terminal.
-4. You scan the QR code with your phone. The PWA opens, reads the key from the URL, and exchanges **encrypted SDP offers** via Appwrite (which acts solely as a signaling server).
-5. A direct, zero-latency **WebRTC P2P Data Channel** is established between your phone and your computer. 
-6. The terminal stream flows directly to your phone, where the PWA's Rich UI parser turns raw ANSI text into native code blocks.
-7. If your phone goes to sleep and the WebRTC connection breaks, the CLI automatically falls back to an encrypted database-polling mechanism to ensure you still get push notifications.
+3. It creates a WebRTC Peer Connection, generates an encrypted SDP Offer, and posts it to Appwrite.
+4. It prints a **QR Code** containing these credentials to your terminal.
+5. You scan the QR code with your phone. The PWA opens, reads the key from the URL, **persists it to `localStorage`**, then cleans the URL to prevent key leakage.
+6. The PWA decrypts the SDP Offer, generates an Answer, and posts it back to Appwrite.
+7. The CLI receives the Answer instantly via **Appwrite Realtime WebSocket** subscription (no polling).
+8. A direct, zero-latency **WebRTC P2P Data Channel** is established.
+9. The CLI sends a **history burst** (the current terminal buffer) so you see full context immediately.
+10. The mobile sends its screen dimensions; the CLI resizes the PTY accordingly.
+11. The terminal stream flows directly to your phone via JSON packets (`{type: "stream"}`), where the PWA's Rich UI parser turns raw ANSI text into native code blocks.
+12. If your phone goes to sleep and the WebRTC connection breaks, the CLI automatically falls back to Appwrite Realtime for push notifications. When you reopen the app, it auto-reconnects WebRTC.
+
+### WebRTC JSON Protocol
+
+The Data Channel uses a structured JSON packet protocol:
+
+| Packet Type | Direction | Description |
+|-------------|-----------|-------------|
+| `stream` | CLI → Mobile | Real-time terminal output chunk |
+| `history` | CLI → Mobile | Full terminal buffer burst for late joiners |
+| `input` | Mobile → CLI | User response text |
+| `resize` | Mobile → CLI | Terminal dimension sync (`cols`, `rows`) |
 
 ## Project Structure
 
@@ -82,14 +103,21 @@ claude-remote-runner/
 │   └── SECURITY.md              # Security architecture guide
 ├── src/                         # CLI source modules
 │   ├── config/                  # Configuration and defaults
-│   ├── detection/               # Pause detection engine (v1.5.0)
-│   ├── services/                # WebRTC, Appwrite, and ntfy notifications
+│   ├── detection/               # Pause detection engine (4-layer hybrid)
+│   │   ├── PauseDetector.js     # Core state machine
+│   │   ├── patterns.js          # Pattern catalog + prompt box parsing
+│   │   ├── hookSetup.js         # Claude Code lifecycle hook integration
+│   │   └── index.js             # Barrel export
+│   ├── services/                # WebRTC, Appwrite Realtime, ntfy
+│   │   ├── webrtc.js            # P2P session + JSON protocol + history burst
+│   │   ├── appwrite.js          # Realtime subscriptions + signaling
+│   │   └── ntfy.js              # Push notifications
 │   └── utils/                   # Crypto and keep-awake utilities
 ├── mobile-app/                  # Self-contained PWA (deploy separately)
 │   ├── src/
-│   │   ├── components/          # RichTerminal, ChatInput
-│   │   ├── hooks/               # useWebRTC, useRemoteSession
-│   │   ├── services/            # Appwrite signaling client
+│   │   ├── components/          # RichTerminal, ChatInput, PromptList
+│   │   ├── hooks/               # useWebRTC (reconnect + resize), useRemoteSession (localStorage)
+│   │   ├── services/            # Appwrite signaling + WebCrypto
 │   │   └── App.jsx              # Root component
 │   └── vercel.json              # Vercel deployment config
 ├── LICENSE
@@ -100,7 +128,7 @@ claude-remote-runner/
 ## Zero-Config Architecture
 
 By default, Claude Remote Runner operates with a **Zero-Config** setup:
-- The CLI uses Appwrite purely as an ephemeral signaling server to exchange WebRTC SDP answers.
+- The CLI uses Appwrite purely as an ephemeral signaling server to exchange WebRTC SDP answers via Realtime WebSockets.
 - The mobile frontend is pre-deployed on Vercel.
 - You can simply `npm install -g` and start using it immediately without configuring any environment variables or databases.
 
@@ -135,8 +163,8 @@ If you prefer total data sovereignty, you can deploy your own instance of the fr
 ## Tech Stack
 
 - **CLI Wrapper**: Node.js, `node-pty`, `node-datachannel`, `strip-ansi`, `commander`
-- **Frontend PWA**: React, Vite, `ansi_up`
-- **Transport**: WebRTC (P2P), Appwrite (Signaling / Fallback Sync)
+- **Frontend PWA**: React, Vite, `ansi_up`, `vite-plugin-pwa`
+- **Transport**: WebRTC (P2P via JSON protocol), Appwrite Realtime (Signaling + Fallback)
 - **Push Notifications**: ntfy.sh
 - **Encryption**: AES-256-GCM (Node.js `crypto` + Web Crypto API)
 
