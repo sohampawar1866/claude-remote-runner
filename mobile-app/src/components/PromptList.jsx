@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 function formatTime(dateStr) {
   const d = dateStr ? new Date(dateStr) : new Date();

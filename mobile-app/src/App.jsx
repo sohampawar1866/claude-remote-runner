@@ -1,4 +1,3 @@
-import React from 'react';
 import { useRemoteSession } from './hooks/useRemoteSession';
 import { useWebRTC } from './hooks/useWebRTC';
 import PromptList from './components/PromptList';
@@ -6,14 +5,7 @@ import ChatInput from './components/ChatInput';
 import RichTerminal from './components/RichTerminal';
 
 /* ─── Icons ───────────────────────────────────────────────────── */
-function LockIcon() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  );
-}
+
 
 function TerminalIcon({ size = 28 }) {
   return (
@@ -64,6 +56,7 @@ function NoSessionScreen() {
 }
 
 /* ─── Main App ────────────────────────────────────────────────── */
+import { useState } from 'react';
 export default function App() {
   const { sessionId, prompts, isDisconnected, isSending, sendRemoteResponse } = useRemoteSession();
   
@@ -73,7 +66,7 @@ export default function App() {
   const isWebRTCTarget = params.get('t') === 'webrtc';
   
   const { isWebRTCConnected, terminalOutput, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey);
-  const [activeTab, setActiveTab] = React.useState('prompts'); // 'prompts' | 'live'
+  const [activeTab, setActiveTab] = useState('prompts'); // 'prompts' | 'live'
   
   const handleSend = (text) => {
     if (isWebRTCConnected) {

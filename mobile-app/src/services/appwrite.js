@@ -69,7 +69,7 @@ export const decryptTextBrowser = async (base64Payload, keyHex) => {
             data
         );
         return new TextDecoder().decode(decryptedBuffer);
-    } catch (e) {
+    } catch {
         return null; // Silent failure on garbage data
     }
 };
@@ -127,7 +127,7 @@ export const sendReadyMessage = async (sessionId) => {
             }
         );
         return true;
-    } catch (err) {
+    } catch {
         return false;
     }
 };
@@ -155,8 +155,8 @@ export const fetchActivePrompts = async (sessionId, encryptionKey = null) => {
             }
         }
         return validDocs;
-    } catch (err) {
-        console.error('Failed to fetch prompts', err);
+    } catch {
+        console.error('Failed to fetch prompts');
         return [];
     }
 };
@@ -183,8 +183,8 @@ export const fetchWebRTCOffer = async (sessionId, encryptionKey) => {
                 return JSON.parse(decryptedStr);
             }
         }
-    } catch (err) {
-        console.error('Failed to fetch WebRTC offer', err);
+    } catch {
+        console.error('Failed to fetch WebRTC offer');
     }
     return null;
 };
@@ -205,8 +205,8 @@ export const sendWebRTCAnswer = async (sessionId, answerSdp, encryptionKey) => {
             }
         );
         return true;
-    } catch (err) {
-        console.error('Failed to send WebRTC answer', err);
+    } catch {
+        console.error('Failed to send WebRTC answer');
         return false;
     }
 };

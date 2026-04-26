@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { AnsiUp } from 'ansi_up';
 
 const ansiUp = new AnsiUp();
@@ -27,6 +27,7 @@ export default function RichTerminal({ text }) {
         const codeContent = lines.slice(1).join('\n');
         
         // Strip ANSI from the code block to make it clean
+        // eslint-disable-next-line no-control-regex
         const cleanCode = codeContent.replace(/\x1B\[\d+;?\d*m/g, '');
         
         parsedBlocks.push({ 
