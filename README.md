@@ -120,8 +120,17 @@ If you prefer total data sovereignty, you can deploy your own instance of the fr
 
 ### 2. Self-Hosting the Signaling Backend
 1. Create a project on [Appwrite Cloud](https://cloud.appwrite.io/) or self-host via Docker.
-2. Create a database (e.g. `remote_runner`) and a `messages` collection.
-3. Configure your `.env` variables accordingly.
+2. Create a database (e.g. `remote_runner`).
+3. Create a collection named `messages` with these attributes:
+   - `sessionId` (String, size 255)
+   - `type` (String, size 50)
+   - `content` (String, size 1000000)
+   - `timestamp` (Datetime)
+4. Go to the Indexes tab and create two Key indexes:
+   - `sessionId_index` on the `sessionId` attribute
+   - `type_index` on the `type` attribute
+5. Set collection permissions to **Any** (Create, Read, Update, Delete). This is safe because all data is E2E encrypted before it reaches the database.
+6. Configure your `.env` variables accordingly.
 
 ## Tech Stack
 
