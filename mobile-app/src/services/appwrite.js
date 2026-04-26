@@ -160,3 +160,53 @@ export const fetchActivePrompts = async (sessionId, encryptionKey = null) => {
         return [];
     }
 };
+
+export const fetchWebRTCOffer = async (sessionId, encryptionKey) => {
+    try {
+        const response = await databases.listDocuments(
+            DATABASE_ID,
+            MESSAGES_COLLECTION_ID,
+            [
+                Query.equal('sessionId', sessionId),
+                Query.equal('type', 'webrtc_offer'),
+                Query.orderDesc('$createdAt'),
+                Query.limit(1)
+            ]
+        );
+        
+        if (response.documents.length > 0) {
+            const doc = response.documents[0];
+            const decryptedStr = await decryptTextBrowser(doc.content, encryptionKey);
+            if (decryptedStr) {
+                // Delete offer to clean up
+                await databases.deleteDocument(DATABASE_ID, MESSAGES_COLLECTION_ID, doc.$id).catch(() => {});
+                return JSON.parse(decryptedStr);
+            }
+        }
+    } catch (err) {
+        console.error('Failed to fetch WebRTC offer', err);
+    }
+    return null;
+};
+
+export const sendWebRTCAnswer = async (sessionId, answerSdp, encryptionKey) => {
+    try {
+        const answerStr = JSON.stringify(answerSdp);
+        const safeContent = await encryptTextBrowser(answerStr, encryptionKey);
+        await databases.createDocument(
+            DATABASE_ID,
+            MESSAGES_COLLECTION_ID,
+            ID.unique(),
+            {
+                sessionId,
+                type: 'webrtc_answer',
+                content: safeContent,
+                timestamp: new Date().toISOString()
+            }
+        );
+        return true;
+    } catch (err) {
+        console.error('Failed to send WebRTC answer', err);
+        return false;
+    }
+};

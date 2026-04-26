@@ -1,5 +1,6 @@
 import React from 'react';
 import { useRemoteSession } from './hooks/useRemoteSession';
+import { useWebRTC } from './hooks/useWebRTC';
 import PromptList from './components/PromptList';
 import ChatInput from './components/ChatInput';
 
@@ -64,6 +65,22 @@ function NoSessionScreen() {
 /* ─── Main App ────────────────────────────────────────────────── */
 export default function App() {
   const { sessionId, prompts, isDisconnected, isSending, sendRemoteResponse } = useRemoteSession();
+  
+  // Extract key to pass to WebRTC
+  const params = new URLSearchParams(window.location.search);
+  const encryptionKey = params.get('k') || localStorage.getItem('remote-claude-key');
+  const isWebRTCTarget = params.get('t') === 'webrtc';
+  
+  const { isWebRTCConnected, terminalOutput, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey);
+  const [activeTab, setActiveTab] = React.useState('prompts'); // 'prompts' | 'live'
+  
+  const handleSend = (text) => {
+    if (isWebRTCConnected) {
+      sendWebRTCMessage(text + '\r');
+      return true;
+    }
+    return sendRemoteResponse(text);
+  };
 
   if (!sessionId) {
     return <NoSessionScreen />;
@@ -82,9 +99,9 @@ export default function App() {
           <div>
             <div className="header-title">Claude Remote</div>
             <div className="header-status">
-              <div className={`status-dot ${isDisconnected ? 'offline' : ''}`} />
+              <div className={`status-dot ${isDisconnected ? 'offline' : (isWebRTCConnected ? 'webrtc' : '')}`} />
               <span className="status-label">
-                {isDisconnected ? 'Session ended' : 'E2E Encrypted · Connected'}
+                {isDisconnected ? 'Session ended' : (isWebRTCConnected ? 'P2P Connected (Live)' : 'E2E Encrypted · Polling')}
               </span>
             </div>
           </div>
@@ -117,8 +134,23 @@ export default function App() {
           </div>
         )}
 
+        {/* Tabs for WebRTC mode */}
+        {isWebRTCTarget && (
+          <div className="tabs">
+            <button className={`tab ${activeTab === 'prompts' ? 'active' : ''}`} onClick={() => setActiveTab('prompts')}>Prompts</button>
+            <button className={`tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>Live View</button>
+          </div>
+        )}
+
+        {/* Live Terminal View */}
+        {activeTab === 'live' && (
+          <div className="live-terminal" style={{ flex: 1, backgroundColor: '#000', color: '#fff', padding: 10, overflowY: 'auto', fontFamily: 'monospace', whiteSpace: 'pre-wrap', borderRadius: 8 }}>
+            {terminalOutput || 'Waiting for live terminal stream...'}
+          </div>
+        )}
+
         {/* Prompt Cards */}
-        <PromptList prompts={prompts} />
+        {activeTab === 'prompts' && <PromptList prompts={prompts} />}
 
         {/* Disconnected Banner */}
         {isDisconnected && (
@@ -135,8 +167,8 @@ export default function App() {
 
       {/* Input */}
       <ChatInput
-        onSend={sendRemoteResponse}
-        isSending={isSending}
+        onSend={handleSend}
+        isSending={isSending && !isWebRTCConnected}
         disabled={isDisconnected}
       />
     </div>
