@@ -187,6 +187,28 @@ body::after {
   gap: 8px;
 }
 
+.disconnect-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+}
+
+.disconnect-btn:hover {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+}
+
 .icon-btn {
   width: 36px;
   height: 36px;

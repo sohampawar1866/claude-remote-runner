@@ -5,12 +5,12 @@ import stripAnsi from 'strip-ansi';
 import { Command } from 'commander';
 import crypto from 'crypto';
 import { getOrGenerateConfig } from '../src/config/index.js';
-import { logPromptToAppwrite, fetchResponseFromAppwrite, isBackendConfigured, pollForPairing, FRONTEND_URL } from '../src/services/appwrite.js';
+import { logPromptToAppwrite, subscribeToResponses, isBackendConfigured, pollForPairing, FRONTEND_URL } from '../src/services/appwrite.js';
 import { sendNtfyAlert } from '../src/services/ntfy.js';
 import { startKeepAwake, stopKeepAwake } from '../src/utils/keepawake.js';
 import { PauseDetector, STATE } from '../src/detection/index.js';
 import { installHook, watchStateFile } from '../src/detection/hookSetup.js';
-import { createWebRTCSession } from '../src/services/webrtc.js';
+import { createWebRTCSession, sendTerminalChunk } from '../src/services/webrtc.js';
 import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 import os from 'os';
@@ -37,7 +37,7 @@ function fixNodePtyPermissions() {
         }
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore errors
   }
 }
@@ -87,14 +87,14 @@ function findClaudeBinary(cmdName = 'claude') {
             try {
               fs.accessSync(fullPath, fs.constants.X_OK);
               return fullPath;
-            } catch (err) {
+            } catch {
               continue; // Skip if not executable
             }
           }
           return fullPath;
         }
       }
-    } catch (e) {
+    } catch {
       // Ignore directory read errors
     }
   }
@@ -120,13 +120,13 @@ const program = new Command();
 program
   .name('remote-claude')
   .description('A CLI wrapper for Claude Code to enable remote interactions')
-  .version('1.5.0');
+  .version('3.0.0');
 
 program
   .command('doctor')
   .description('Run diagnostics to check environment and configuration')
   .action(() => {
-    console.log('\\x1b[36m[remote-claude] Diagnostics\\x1b[39m\\n');
+    console.log('\x1b[36m[remote-claude] Diagnostics\x1b[39m\n');
     console.log(`Node Version: ${process.version} ${Number(process.versions.node.split('.')[0]) >= 16 ? '✅' : '❌ (Requires >=16)'}`);
     console.log(`Appwrite Configured: ${isBackendConfigured ? '✅' : '❌ (Check .env)'}`);
     console.log(`PTY Available: ✅`);
@@ -180,25 +180,6 @@ console.log(`\x1b[36m${sessionUrl}\x1b[39m\n`);
 
 let webrtcChannel = null;
 
-if (isBackendConfigured) {
-  createWebRTCSession(channelId, encryptionKey, frontendUrl)
-    .then(({ peer, dataChannel }) => {
-      webrtcChannel = dataChannel;
-      
-      dataChannel.onMessage((msg) => {
-        const text = msg.toString();
-        ptyProcess.write(`${text}\r`);
-        if (isWaitingForRemote) cancelRemoteWait();
-        detector.userResponded();
-      });
-    })
-    .catch(err => {
-      console.error('\x1b[31m[WebRTC] Failed to initialize P2P tunnel. Falling back to polling.\x1b[39m');
-      qrcode.generate(sessionUrl, { small: true });
-      pollForPairing(channelId);
-    });
-}
-
 // Extract the base command and any additional arguments
 const cmdName = options.command;
 const cmdArgs = args.length > 0 ? args : [];
@@ -241,7 +222,7 @@ try {
     const shell = isWin ? (process.env.COMSPEC || 'cmd.exe') : (process.env.SHELL || '/bin/sh');
     const shellArgs = isWin 
       ? ['/d', '/c', `"${absoluteCmdPath}" ${cmdArgs.join(' ')}`]
-      : ['-c', `"${absoluteCmdPath}" ${cmdArgs.map(a => `"${a.replace(/"/g, '\\"')}"`).join(' ')}`];
+      : ['-c', `"${absoluteCmdPath}" ${cmdArgs.map(a => `"${a.replace(/"/g, '\\\\"')}"`).join(' ')}`];
       
     if (options.debug) console.log(`[DEBUG] Attempting shell spawn: ${shell} ${shellArgs.join(' ')}`);
     ptyProcess = pty.spawn(shell, shellArgs, ptyOptions);
@@ -261,7 +242,7 @@ try {
 }
 
 // ─── Pause Detection Engine ──────────────────────────────────────
-// Replaces the old 3-regex approach with a 4-layer hybrid system:
+// 4-layer hybrid system:
 //   Layer 1: Hook-based IPC (optional, highest reliability)
 //   Layer 2: Expanded pattern matching (15+ patterns from CCManager)
 //   Layer 3: Silence-based fallback (universal safety net)
@@ -269,7 +250,7 @@ try {
 // ─────────────────────────────────────────────────────────────────
 
 let isWaitingForRemote = false;
-let pollingInterval = null;
+let responseUnsubscribe = null;
 let hookCleanup = null;
 let hookWatchCleanup = null;
 
@@ -296,6 +277,32 @@ const detector = new PauseDetector({
     }
   },
 });
+
+// ── WebRTC Initialization ────────────────────────────────────────
+// Pass lifecycle hooks so the WebRTC module can interact with the PTY
+// and detector without circular imports.
+if (isBackendConfigured) {
+  createWebRTCSession(channelId, encryptionKey, frontendUrl, {
+    onMessage: (text) => {
+      ptyProcess.write(text);
+      if (isWaitingForRemote) cancelRemoteWait();
+      detector.userResponded();
+    },
+    onResize: (dims) => {
+      if (options.debug) console.log(`\x1b[90m[WebRTC] Mobile requested resize: ${dims.cols}x${dims.rows}\x1b[39m`);
+    },
+    getBuffer: () => detector.buffer,
+    ptyProcess: ptyProcess,
+  })
+    .then(({ peer, dataChannel }) => {
+      webrtcChannel = dataChannel;
+    })
+    .catch(() => {
+      console.error('\x1b[31m[WebRTC] Failed to initialize P2P tunnel. Falling back to polling.\x1b[39m');
+      qrcode.generate(sessionUrl, { small: true });
+      pollForPairing(channelId);
+    });
+}
 
 // ── Layer 1: Hook-Based IPC (optional) ───────────────────────────
 // Install Claude Code lifecycle hooks for the most reliable detection.
@@ -330,14 +337,8 @@ ptyProcess.onData((data) => {
   // Feed every chunk into the PauseDetector.
   detector.feedData(data);
 
-  // Stream output to WebRTC if connected (Phase 2 Live Mirroring)
-  if (webrtcChannel && webrtcChannel.isOpen()) {
-    try {
-      webrtcChannel.sendMessage(data);
-    } catch (e) {
-      // ignore
-    }
-  }
+  // Stream output to WebRTC via JSON protocol (Phase 3)
+  sendTerminalChunk(webrtcChannel, data);
 });
 
 // ── Pass user input to the PTY ───────────────────────────────────
@@ -367,36 +368,31 @@ function onClaudePaused(buffer) {
   const lines = cleanBuffer.split('\n');
   const contextLines = lines.slice(Math.max(lines.length - 8, 0)).join('\n');
 
-  // Trigger Phase 2 Backend Sync
+  // Push notification and DB fallback prompt
   sendNtfyAlert(config.ntfyTopic, 'Claude Needs Input', 'Tap here to securely view the prompt and respond.', channelId, encryptionKey, frontendUrl, isBackendConfigured);
   logPromptToAppwrite(channelId, contextLines, encryptionKey);
 
-  // Start polling Appwrite for a response
-  if (!pollingInterval) {
-    pollingInterval = setInterval(async () => {
-      if (!isWaitingForRemote) return;
-
-      const response = await fetchResponseFromAppwrite(channelId, encryptionKey);
-      if (response !== null) {
-        // We got a response from the mobile app!
-        ptyProcess.write(`${response}\r`);
-        cancelRemoteWait();
-        detector.userResponded();
-      }
-    }, 1000); // Poll every 1 second
+  // Phase 2: Subscribe to responses via Appwrite Realtime instead of setInterval polling
+  if (!responseUnsubscribe) {
+    responseUnsubscribe = subscribeToResponses(channelId, encryptionKey, (responseText) => {
+      // We got a response from the mobile app!
+      ptyProcess.write(`${responseText}\r`);
+      cancelRemoteWait();
+      detector.userResponded();
+    });
   }
 }
 
 function cancelRemoteWait() {
   isWaitingForRemote = false;
-  if (pollingInterval) {
-    clearInterval(pollingInterval);
-    pollingInterval = null;
+  if (responseUnsubscribe) {
+    responseUnsubscribe();
+    responseUnsubscribe = null;
   }
 }
 
 // ── Handle exit — clean up hooks and notify mobile ──────────────
-ptyProcess.onExit(async ({ exitCode, signal }) => {
+ptyProcess.onExit(async ({ exitCode }) => {
   cancelRemoteWait();
   detector.destroy();
   stopKeepAwake();

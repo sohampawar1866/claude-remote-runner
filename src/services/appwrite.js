@@ -51,6 +51,49 @@ export async function logPromptToAppwrite(channelId, promptText, encryptionKey, 
   }
 }
 
+/**
+ * Subscribe to the messages collection via Appwrite Realtime WebSockets.
+ * Replaces setInterval-based polling for dramatically lower latency and battery usage.
+ * 
+ * @param {Function} callback - Called with the raw document payload on every new document.
+ * @returns {Function} Unsubscribe function.
+ */
+export function subscribeToCollection(callback) {
+  if (!isBackendConfigured) return () => {};
+  return client.subscribe(
+    `databases.${DATABASE_ID}.collections.${MESSAGES_COLLECTION_ID}.documents`,
+    (response) => {
+      if (response.events.some(e => e.includes('.create'))) {
+        callback(response.payload);
+      }
+    }
+  );
+}
+
+/**
+ * Subscribe to response messages for a specific channel via Appwrite Realtime.
+ * When a response arrives, it is decrypted, the document is deleted, and the callback fires.
+ * 
+ * @param {string} channelId - Session channel to listen on.
+ * @param {string} encryptionKey - AES-256 hex key for decryption.
+ * @param {Function} onResponse - Called with the decrypted response text.
+ * @returns {Function} Unsubscribe function.
+ */
+export function subscribeToResponses(channelId, encryptionKey, onResponse) {
+  if (!isBackendConfigured) return () => {};
+  return subscribeToCollection(async (payload) => {
+    if (payload.sessionId === channelId && payload.type === 'response') {
+      // Delete from queue immediately
+      await databases.deleteDocument(DATABASE_ID, MESSAGES_COLLECTION_ID, payload.$id).catch(() => {});
+      
+      const decrypted = encryptionKey ? decryptText(payload.content, encryptionKey) : payload.content;
+      if (decrypted !== null) {
+        onResponse(decrypted);
+      }
+    }
+  });
+}
+
 export async function fetchResponseFromAppwrite(channelId, encryptionKey) {
   if (!isBackendConfigured) return null;
   try {
@@ -82,7 +125,7 @@ export async function fetchResponseFromAppwrite(channelId, encryptionKey) {
       
       return validResponse;
     }
-  } catch (err) {
+  } catch {
     // Fail silently during polling
   }
   return null;
@@ -106,7 +149,7 @@ export async function pollForPairing(channelId) {
         console.log('\n\x1b[32m🟢 Paired with mobile device!\x1b[39m');
         await databases.deleteDocument(DATABASE_ID, MESSAGES_COLLECTION_ID, response.documents[0].$id);
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, 2000);

@@ -1,64 +1,85 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchActivePrompts, subscribeToMessages, sendResponse, sendReadyMessage } from '../services/appwrite';
 
+const STORAGE_KEYS = {
+  SESSION: 'remote-claude-session',
+  KEY: 'remote-claude-key',
+  WEBRTC: 'remote-claude-webrtc',
+};
+
+/**
+ * Reads session credentials from URL params first, then falls back to localStorage.
+ * This ensures the PWA works correctly when launched from the Home Screen (iOS strips URL params).
+ */
+function resolveCredentials() {
+  const params = new URLSearchParams(window.location.search);
+
+  const urlId = params.get('c') || params.get('sessionId');
+  const urlKey = params.get('k');
+  const urlWebRTC = params.get('t') === 'webrtc';
+
+  // If the URL contains fresh credentials, persist them immediately
+  if (urlId && urlKey) {
+    localStorage.setItem(STORAGE_KEYS.SESSION, urlId);
+    localStorage.setItem(STORAGE_KEYS.KEY, urlKey);
+    localStorage.setItem(STORAGE_KEYS.WEBRTC, urlWebRTC ? 'true' : 'false');
+
+    // Clean URL after saving (prevents accidental key leakage via screenshots / browser history)
+    if (window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    return { sessionId: urlId, encryptionKey: urlKey, isWebRTCSession: urlWebRTC };
+  }
+
+  // Fallback: resurrect from localStorage (PWA Home Screen launch)
+  return {
+    sessionId: localStorage.getItem(STORAGE_KEYS.SESSION) || '',
+    encryptionKey: localStorage.getItem(STORAGE_KEYS.KEY) || null,
+    isWebRTCSession: localStorage.getItem(STORAGE_KEYS.WEBRTC) === 'true',
+  };
+}
+
 export function useRemoteSession() {
-  const [sessionId] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlId = params.get('c') || params.get('sessionId');
-    if (urlId) {
-      localStorage.setItem('remote-claude-session', urlId);
-      return urlId;
-    }
-    return localStorage.getItem('remote-claude-session') || '';
-  });
-  
-  const [encryptionKey] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlKey = params.get('k');
-    if (urlKey) {
-      localStorage.setItem('remote-claude-key', urlKey);
-      return urlKey;
-    }
-    return localStorage.getItem('remote-claude-key') || null;
-  });
+  const [credentials] = useState(resolveCredentials);
+  const { sessionId, encryptionKey, isWebRTCSession } = credentials;
 
   const [prompts, setPrompts] = useState([]);
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
-    if (sessionId) {
-      // Fetch initial prompts
-      fetchActivePrompts(sessionId, encryptionKey).then(initialPrompts => {
-        const disconnectDoc = initialPrompts.find(p => p.type === 'disconnect');
-        if (disconnectDoc) {
-          setIsDisconnected(true);
-          localStorage.removeItem('remote-claude-session');
-          localStorage.removeItem('remote-claude-key');
-          return;
-        }
-        setPrompts(initialPrompts.filter(p => p.type === 'prompt').reverse());
-      });
-      
-      // Notify CLI we are connected
-      sendReadyMessage(sessionId);
-      
-      const unsubscribe = subscribeToMessages((payload) => {
-        if (payload.sessionId === sessionId && payload.type === 'prompt') {
-          setPrompts(prev => [...prev, payload]);
-        } else if (payload.sessionId === sessionId && payload.type === 'disconnect') {
-          setIsDisconnected(true);
-          setPrompts([]);
-          localStorage.removeItem('remote-claude-session');
-          localStorage.removeItem('remote-claude-key');
-        }
-      }, encryptionKey);
-      
-      return () => unsubscribe();
-    }
+    if (!sessionId) return;
+
+    // Fetch initial prompts
+    fetchActivePrompts(sessionId, encryptionKey).then(initialPrompts => {
+      const disconnectDoc = initialPrompts.find(p => p.type === 'disconnect');
+      if (disconnectDoc) {
+        setIsDisconnected(true);
+        clearStorage();
+        return;
+      }
+      setPrompts(initialPrompts.filter(p => p.type === 'prompt').reverse());
+    });
+    
+    // Notify CLI we are connected
+    sendReadyMessage(sessionId);
+    
+    // Subscribe to realtime messages via Appwrite WebSockets (Phase 2)
+    const unsubscribe = subscribeToMessages((payload) => {
+      if (payload.sessionId === sessionId && payload.type === 'prompt') {
+        setPrompts(prev => [...prev, payload]);
+      } else if (payload.sessionId === sessionId && payload.type === 'disconnect') {
+        setIsDisconnected(true);
+        setPrompts([]);
+        clearStorage();
+      }
+    }, encryptionKey);
+    
+    return () => unsubscribe();
   }, [sessionId, encryptionKey]);
 
-  const sendRemoteResponse = async (text) => {
+  const sendRemoteResponse = useCallback(async (text) => {
     if (!text.trim() || !sessionId || isSending) return false;
     
     setIsSending(true);
@@ -70,13 +91,28 @@ export function useRemoteSession() {
     
     setIsSending(false);
     return success;
-  };
+  }, [sessionId, encryptionKey, isSending]);
+
+  const disconnect = useCallback(() => {
+    clearStorage();
+    setIsDisconnected(true);
+    setPrompts([]);
+  }, []);
 
   return {
     sessionId,
+    encryptionKey,
+    isWebRTCSession,
     prompts,
     isDisconnected,
     isSending,
-    sendRemoteResponse
+    sendRemoteResponse,
+    disconnect,
   };
+}
+
+function clearStorage() {
+  localStorage.removeItem(STORAGE_KEYS.SESSION);
+  localStorage.removeItem(STORAGE_KEYS.KEY);
+  localStorage.removeItem(STORAGE_KEYS.WEBRTC);
 }

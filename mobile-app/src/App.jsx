@@ -6,7 +6,6 @@ import RichTerminal from './components/RichTerminal';
 
 /* ─── Icons ───────────────────────────────────────────────────── */
 
-
 function TerminalIcon({ size = 28 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -47,7 +46,7 @@ function NoSessionScreen() {
         <div className="no-session-step">
           <div className="step-num">2</div>
           <div className="step-text">
-            Open the secure link printed in your terminal - it contains your encrypted session key
+            Scan the QR code printed in your terminal to connect instantly
           </div>
         </div>
       </div>
@@ -56,25 +55,21 @@ function NoSessionScreen() {
 }
 
 /* ─── Main App ────────────────────────────────────────────────── */
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+
 export default function App() {
-  const { sessionId, prompts, isDisconnected, isSending, sendRemoteResponse } = useRemoteSession();
+  const { sessionId, encryptionKey, isWebRTCSession, prompts, isDisconnected, isSending, sendRemoteResponse, disconnect } = useRemoteSession();
   
-  // Extract key to pass to WebRTC
-  const params = new URLSearchParams(window.location.search);
-  const encryptionKey = params.get('k') || localStorage.getItem('remote-claude-key');
-  const isWebRTCTarget = params.get('t') === 'webrtc';
-  
-  const { isWebRTCConnected, terminalOutput, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey);
+  const { isWebRTCConnected, terminalOutput, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey, isWebRTCSession);
   const [activeTab, setActiveTab] = useState('prompts'); // 'prompts' | 'live'
   
-  const handleSend = (text) => {
+  const handleSend = useCallback((text) => {
     if (isWebRTCConnected) {
-      sendWebRTCMessage(text + '\r');
+      sendWebRTCMessage(JSON.stringify({ type: 'input', data: text + '\r' }));
       return true;
     }
     return sendRemoteResponse(text);
-  };
+  }, [isWebRTCConnected, sendWebRTCMessage, sendRemoteResponse]);
 
   if (!sessionId) {
     return <NoSessionScreen />;
@@ -107,13 +102,18 @@ export default function App() {
               <StopIcon />
             </div>
           )}
+          {!isDisconnected && (
+            <button className="disconnect-btn" onClick={disconnect} title="Disconnect session">
+              ✕
+            </button>
+          )}
         </div>
       </header>
 
       {/* Content */}
       <div className="content-area">
         {/* Waiting / empty state */}
-        {!hasPrompts && !isDisconnected && (
+        {!hasPrompts && !isDisconnected && activeTab === 'prompts' && (
           <div className="empty-state">
             <div className="empty-state-icon">
               <TerminalIcon size={30} />
@@ -129,7 +129,7 @@ export default function App() {
         )}
 
         {/* Tabs for WebRTC mode */}
-        {isWebRTCTarget && (
+        {isWebRTCSession && (
           <div className="tabs">
             <button className={`tab ${activeTab === 'prompts' ? 'active' : ''}`} onClick={() => setActiveTab('prompts')}>Prompts</button>
             <button className={`tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>Live View</button>
