@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "ansi_up": "^6.0.6",
     "appwrite": "^24.2.0",
     "lucide-react": "^1.11.0",
     "react": "^19.2.5",

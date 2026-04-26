@@ -3,6 +3,7 @@ import { useRemoteSession } from './hooks/useRemoteSession';
 import { useWebRTC } from './hooks/useWebRTC';
 import PromptList from './components/PromptList';
 import ChatInput from './components/ChatInput';
+import RichTerminal from './components/RichTerminal';
 
 /* ─── Icons ───────────────────────────────────────────────────── */
 function LockIcon() {
@@ -144,9 +145,7 @@ export default function App() {
 
         {/* Live Terminal View */}
         {activeTab === 'live' && (
-          <div className="live-terminal" style={{ flex: 1, backgroundColor: '#000', color: '#fff', padding: 10, overflowY: 'auto', fontFamily: 'monospace', whiteSpace: 'pre-wrap', borderRadius: 8 }}>
-            {terminalOutput || 'Waiting for live terminal stream...'}
-          </div>
+          <RichTerminal text={terminalOutput} />
         )}
 
         {/* Prompt Cards */}
