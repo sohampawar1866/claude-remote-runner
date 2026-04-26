@@ -117,7 +117,7 @@ const program = new Command();
 program
   .name('remote-claude')
   .description('A CLI wrapper for Claude Code to enable remote interactions')
-  .version('1.4.0');
+  .version('1.4.1');
 
 program
   .command('doctor')
@@ -245,7 +245,9 @@ const PAUSE_THRESHOLD_MS = 1500; // Time to wait after detecting a prompt patter
 // Regex patterns to match Claude Code's interactive prompts
 // e.g. "? Do you want to run this command? (Y/n)" or "> "
 const PROMPT_PATTERNS = [
-  /(?:\?.*\(Y\/n\).*|>\s*)$/i, // Basic Yes/No or prompt
+  /(?:\?.*\(Y\/n\).*|[>❯]\s*)$/i, // Basic Yes/No or prompt (including heavy chevron)
+  /^\s*\d+\.\s+.*$/i,             // Numbered menu options (e.g. "7. Light mode")
+  /Press Enter to continue/i      // General continue prompts
 ];
 
 // Handle terminal resizing
