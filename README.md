@@ -11,21 +11,6 @@
 
 A cross-platform CLI wrapper and Progressive Web App (PWA) that lets you control [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) remotely. Watch Claude code in real-time on your phone via WebRTC, get push notifications when it pauses for input, and respond directly from your mobile device.
 
-## Features
-
-- **Live Terminal Mirroring (WebRTC)** - Watch Claude's output stream in real-time directly on your phone with zero latency over a secure peer-to-peer data channel.
-- **Rich UI Parsing** - The mobile dashboard automatically parses raw ANSI streams into beautiful, native markdown and code blocks, fully preserving terminal colors.
-- **Instant QR Pairing** - Simply scan the QR code printed in your terminal to instantly establish a WebRTC connection. No manual URL copying required.
-- **Late Joiner History Burst** - If you scan the QR code after Claude has been running for a while, you immediately receive the full terminal history so you never miss context.
-- **Adaptive PTY Resizing** - The mobile app automatically sends your phone's screen dimensions to the CLI, which resizes the pseudo-terminal for a pixel-perfect mobile view.
-- **Auto-Reconnect** - If your phone goes to sleep or loses network, the app automatically renegotiates a new WebRTC tunnel when it wakes up.
-- **Reliable Pause Detection** - 4-layer hybrid detection engine with prompt box structural parsing, Claude Code lifecycle hooks, silence-based fallback, and a state machine.
-- **Hybrid Appwrite Signaling** - The CLI uses secure HTTP polling to avoid Node.js WebSocket limitations (preventing `window is not defined` crashes), while the mobile app uses Appwrite Realtime WebSockets for instant delivery.
-- **Remote Control & Push Notifications** - Get alerted via ntfy.sh whenever Claude pauses (e.g., approval prompts, tool permissions) and respond from your phone.
-- **Zero-Trust Security** - All peer-to-peer connections and signaling data are secured with AES-256-GCM encryption. Nobody can read your code.
-- **Cross-Platform Keep-Awake** - Prevents your Mac, Windows, or Linux machine from sleeping during long-running tasks.
-- **PWA Home Screen Support** - Session credentials are persisted to `localStorage`, so the app works even when launched from your iOS/Android home screen.
-
 ## Installation
 
 Install globally via npm:
@@ -41,6 +26,8 @@ To start a remote session, simply run:
 ```bash
 remote-claude
 ```
+
+On first launch, the CLI prints a QR code. Scan it with your phone's native camera to instantly open the PWA and establish a live WebRTC peer connection.
 
 ### Options
 
@@ -63,7 +50,12 @@ remote-claude -k
 remote-claude -d
 ```
 
-On first launch, the CLI prints a QR code. Scan it with your phone's native camera to instantly open the PWA and establish a live WebRTC peer connection.
+## Core Features
+
+- **Live Terminal Mirroring (WebRTC)** - Watch the output stream in beautiful markdown with zero latency. Join late and instantly get the full terminal history burst.
+- **Instant QR Pairing & PWA** - Scan the QR code to connect. The session persists to `localStorage`, allowing you to add the app to your iOS/Android home screen.
+- **Reliable Pause Detection** - A 4-layer hybrid detection engine automatically sends you push notifications when Claude pauses for input (e.g., approval prompts).
+- **Zero-Trust Security** - All peer-to-peer streams and Appwrite signaling payloads are secured with AES-256-GCM encryption.
 
 ## Architecture & Security
 
