@@ -19,6 +19,8 @@ Install globally via npm:
 npm install -g @sohampawar1866/remote-claude
 ```
 
+> **Note on Self-Hosting:** By default, this connects to a pre-deployed frontend and signaling server (zero-config). If you prefer absolute data sovereignty, you can easily self-host both the PWA and the Appwrite signaling server. See the [Self-Hosting](#self-hosting-optional) section at the bottom of this README.
+
 ## Usage
 
 To start a remote session, simply run:
