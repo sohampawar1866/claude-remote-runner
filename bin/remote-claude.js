@@ -175,11 +175,14 @@ if (options.keepAwake) {
 }
 
 console.log('\x1b[36m[remote-claude] Active Session URL:\x1b[39m');
-const sessionUrl = `${frontendUrl}/?c=${channelId}&k=${encryptionKey}`;
+const sessionUrl = `${frontendUrl}/?c=${channelId}&k=${encryptionKey}&n=${config.ntfyTopic}`;
 console.log(`\x1b[36m${sessionUrl}\x1b[39m\n`);
 
-let webrtcChannel = null;
+qrcode.generate(sessionUrl, { small: true }, (code) => {
+  console.log(code);
+});
 
+let webrtcChannel = null;
 // Extract the base command and any additional arguments
 const cmdName = options.command;
 const cmdArgs = args.length > 0 ? args : [];

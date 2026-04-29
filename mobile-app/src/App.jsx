@@ -58,7 +58,7 @@ function NoSessionScreen() {
 import { useState, useCallback } from 'react';
 
 export default function App() {
-  const { sessionId, encryptionKey, isWebRTCSession, prompts, isDisconnected, isSending, sendRemoteResponse, disconnect } = useRemoteSession();
+  const { sessionId, encryptionKey, isWebRTCSession, ntfyTopic, prompts, isDisconnected, isSending, sendRemoteResponse, disconnect } = useRemoteSession();
   
   const { isWebRTCConnected, dataChannel, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey, isWebRTCSession);
   
@@ -100,6 +100,11 @@ export default function App() {
         </div>
 
         <div className="header-actions">
+          {ntfyTopic && !isDisconnected && (
+            <a className="ntfy-btn" href={`ntfy://ntfy.sh/${ntfyTopic}`} title="Enable push notifications">
+              🔔 Alerts
+            </a>
+          )}
           {isDisconnected && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-secondary)' }}>
               <StopIcon />
