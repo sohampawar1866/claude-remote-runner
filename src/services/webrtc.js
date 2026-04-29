@@ -144,7 +144,7 @@ export async function createWebRTCSession(channelId, encryptionKey, frontendUrl,
               }
             }
           } catch (err) {
-            // Silently ignore polling errors
+            console.error("Polling error:", err.message);
           }
         }, 1000);
       }

@@ -29,7 +29,7 @@ function NoSessionScreen() {
     <div className="no-session">
       <div className="no-session-card">
         <div className="no-session-icon">
-          <img src="/logo.png" alt="Remote Claude" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+          <img src="/logo.png" alt="Remote Runner" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
         </div>
         <h1 className="no-session-title">No Active Session</h1>
         <p className="no-session-desc">
@@ -83,10 +83,10 @@ export default function App() {
       <header className="header">
         <div className="header-brand">
           <div className="header-logo">
-            <img src="/logo.png" alt="Remote Claude" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+            <img src="/logo.png" alt="Remote Runner" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
           </div>
           <div>
-            <div className="header-title">Claude Remote</div>
+            <div className="header-title">Remote Runner</div>
             <div className="header-status">
               <div className={`status-dot ${isDisconnected ? 'offline' : (isWebRTCConnected ? 'webrtc' : '')}`} />
               <span className="status-label">

@@ -1,13 +1,15 @@
-# Claude Remote Runner - Mobile PWA
+# Remote Runner for Claude - Mobile PWA
 
-This is the frontend Progressive Web App (PWA) for the Claude Remote Runner project. It provides a mobile-friendly interface to receive, decrypt, and respond to prompts from your local Claude Code CLI instance.
+> **Disclaimer:** This is an unofficial community project and is not affiliated with, endorsed by, or associated with Anthropic. "Claude" is a trademark of Anthropic.
+
+This is the frontend Progressive Web App (PWA) for the Remote Runner project. It provides a mobile-friendly interface to receive, decrypt, and respond to prompts from your local `claude-code` CLI instance.
 
 ## Architecture
 
-This frontend is designed to be completely stateless and relies solely on End-to-End Encryption.
+This frontend is designed to be highly secure and relies heavily on End-to-End Encryption.
 - The `encryptionKey` is parsed directly from the URL.
-- Messages pulled from Appwrite are decrypted entirely in the browser using the Web Crypto API (`AES-256-GCM`).
-- Responses are encrypted before being pushed back to Appwrite.
+- Messages pulled from Appwrite via Realtime WebSockets are decrypted entirely in the browser using the Web Crypto API (`AES-256-GCM`).
+- Responses and WebRTC answers are encrypted before being pushed back to Appwrite.
 - The session credentials are stored transiently in the browser's `localStorage` to allow you to close and reopen the app or add it to your Home Screen. These are automatically wiped the moment the terminal session ends.
 
 ## Development
