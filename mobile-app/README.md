@@ -7,6 +7,7 @@ This is the frontend Progressive Web App (PWA) for the Remote Runner project. It
 ## Architecture
 
 This frontend is designed to be highly secure and relies heavily on End-to-End Encryption.
+- The **Live View** tab uses `xterm.js` (the same terminal engine behind VS Code) to render a pixel-perfect mirror of your desktop terminal — including cursor movements, colors, and full TUI redraws.
 - The `encryptionKey` is parsed directly from the URL.
 - Messages pulled from Appwrite via Realtime WebSockets are decrypted entirely in the browser using the Web Crypto API (`AES-256-GCM`).
 - Responses and WebRTC answers are encrypted before being pushed back to Appwrite.

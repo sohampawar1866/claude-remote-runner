@@ -54,7 +54,7 @@ remote-claude -d
 
 ## Core Features
 
-- **Live Terminal Mirroring (WebRTC)** - Watch the output stream in beautiful markdown with zero latency. Join late and instantly get the full terminal history burst.
+- **Live Terminal Mirroring (WebRTC + xterm.js)** - A pixel-perfect terminal mirror powered by xterm.js (the same engine behind VS Code). Cursor movements, colors, and TUI redraws render flawlessly. Join late and get the full history burst.
 - **Instant QR Pairing & PWA** - Scan the QR code to connect. The session persists to `localStorage`, allowing you to add the app to your iOS/Android home screen.
 - **Reliable Pause Detection** - A 4-layer hybrid detection engine automatically sends you push notifications when Claude pauses for input (e.g., approval prompts).
 - **Zero-Trust Security** - All peer-to-peer streams and Appwrite signaling payloads are secured with AES-256-GCM encryption.
@@ -63,7 +63,7 @@ remote-claude -d
 
 Security is a core concern for this tool. See the full **[Security Architecture Guide](./docs/SECURITY.md)** for details on the zero-trust WebRTC model.
 
-Here is how the v3.1.1 pipeline works:
+Here is how the v3.2.0 pipeline works:
 
 1. `remote-claude` wraps the `claude` CLI using `node-pty` and monitors terminal output.
 2. The CLI generates a random `channelId` and AES `encryptionKey`.
@@ -74,7 +74,7 @@ Here is how the v3.1.1 pipeline works:
 7. The CLI **securely polls** for the Answer (to ensure stability in Node.js) and establishes a direct, zero-latency **WebRTC P2P Data Channel**.
 8. The CLI sends a **history burst** (the current terminal buffer) so you see full context immediately.
 9. The mobile sends its screen dimensions; the CLI resizes the PTY accordingly.
-10. The terminal stream flows directly to your phone via JSON packets (`{type: "stream"}`), where the PWA's Rich UI parser turns raw ANSI text into native code blocks.
+10. The terminal stream flows directly to your phone via JSON packets (`{type: "stream"}`), where the PWA's **xterm.js** terminal emulator renders cursor movements, colors, and TUI redraws with full fidelity.
 11. If your phone goes to sleep and the WebRTC connection breaks, the CLI automatically falls back to Appwrite for push notifications. When you reopen the app, it auto-reconnects WebRTC.
 
 ### WebRTC JSON Protocol
@@ -110,7 +110,7 @@ claude-remote-runner/
 │   └── utils/                   # Crypto and keep-awake utilities
 ├── mobile-app/                  # Self-contained PWA (deploy separately)
 │   ├── src/
-│   │   ├── components/          # RichTerminal, ChatInput, PromptList
+│   │   ├── components/          # XTermTerminal, ChatInput, PromptList
 │   │   ├── hooks/               # useWebRTC (reconnect + resize), useRemoteSession (localStorage)
 │   │   ├── services/            # Appwrite signaling (Realtime WebSockets) + WebCrypto
 │   │   └── App.jsx              # Root component
@@ -158,7 +158,7 @@ If you prefer total data sovereignty, you can deploy your own instance of the fr
 ## Tech Stack
 
 - **CLI Wrapper**: Node.js, `node-pty`, `node-datachannel`, `strip-ansi`, `commander`
-- **Frontend PWA**: React, Vite, `ansi_up`, `vite-plugin-pwa`
+- **Frontend PWA**: React, Vite, `@xterm/xterm`, `vite-plugin-pwa`
 - **Transport**: WebRTC (P2P via JSON protocol), Appwrite (Polling CLI + Realtime Mobile)
 - **Push Notifications**: ntfy.sh
 - **Encryption**: AES-256-GCM (Node.js `crypto` + Web Crypto API)
