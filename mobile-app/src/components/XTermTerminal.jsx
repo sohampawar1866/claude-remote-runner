@@ -3,16 +3,18 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-export default function XTermTerminal({ dataChannel }) {
+export default function XTermTerminal({ dataChannel, onPrompt }) {
   const terminalRef = useRef(null);
   const xtermRef = useRef(null);
   const fitAddonRef = useRef(null);
   const dataChannelRef = useRef(dataChannel);
+  const onPromptRef = useRef(onPrompt);
 
-  // Keep ref in sync so resize handler always has the latest channel
+  // Keep refs in sync so resize/message handlers always have the latest state
   useEffect(() => {
     dataChannelRef.current = dataChannel;
-  }, [dataChannel]);
+    onPromptRef.current = onPrompt;
+  }, [dataChannel, onPrompt]);
 
   // Initialize xterm.js once on mount
   useEffect(() => {
@@ -98,6 +100,10 @@ export default function XTermTerminal({ dataChannel }) {
         const packet = JSON.parse(e.data);
         if (packet.type === 'stream' || packet.type === 'history') {
           xtermRef.current?.write(packet.data);
+        } else if (packet.type === 'prompt') {
+          if (onPromptRef.current) {
+            onPromptRef.current(packet.content);
+          }
         }
       } catch {
         xtermRef.current?.write(e.data);

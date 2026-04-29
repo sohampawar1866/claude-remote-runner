@@ -5,9 +5,22 @@ const QUICK_REPLIES = [
   { label: '✕ No', value: 'No', cls: 'no' },
 ];
 
-export default function ChatInput({ onSend, isSending, disabled }) {
+export default function ChatInput({ latestPrompt, onSend, isSending, disabled }) {
   const [value, setValue] = useState('');
   const inputRef = useRef(null);
+
+  // Determine if we should show Yes/No buttons based on the latest prompt text.
+  // We check if it ends with typical yes/no prompts, or contains (y/n)
+  const isYesNoPrompt = () => {
+    if (!latestPrompt) return false;
+    const text = latestPrompt.toLowerCase();
+    return text.includes('(y/n)') || 
+           text.includes('(yes/no)') || 
+           text.match(/\byes or no\b/i) ||
+           text.match(/\b(y\/n)\b/i);
+  };
+
+  const showQuickReplies = isYesNoPrompt();
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -34,18 +47,20 @@ export default function ChatInput({ onSend, isSending, disabled }) {
   return (
     <div className="input-area">
       {/* Quick Reply Buttons */}
-      <div className="quick-replies">
-        {QUICK_REPLIES.map(({ label, value: v, cls }) => (
-          <button
-            key={v}
-            className={`quick-btn ${cls}`}
-            onClick={() => handleQuick(v)}
-            disabled={disabled || isSending}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {showQuickReplies && (
+        <div className="quick-replies">
+          {QUICK_REPLIES.map(({ label, value: v, cls }) => (
+            <button
+              key={v}
+              className={`quick-btn ${cls}`}
+              onClick={() => handleQuick(v)}
+              disabled={disabled || isSending}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Text Input Row */}
       <form onSubmit={handleSubmit}>

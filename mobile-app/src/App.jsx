@@ -62,12 +62,15 @@ export default function App() {
   
   const { isWebRTCConnected, dataChannel, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey, isWebRTCSession);
   
+  const [webrtcPrompt, setWebrtcPrompt] = useState(null);
+  
   // Auto-switch to live view when WebRTC connects.
   // Fall back to polling (Prompts) when disconnected.
   const showLiveView = isWebRTCConnected;
   
   const handleSend = useCallback((text) => {
     if (isWebRTCConnected) {
+      setWebrtcPrompt(null);
       sendWebRTCMessage(JSON.stringify({ type: 'input', data: text + '\r' }));
       return true;
     }
@@ -138,7 +141,7 @@ export default function App() {
 
         {/* Live Terminal View */}
         {showLiveView && (
-          <XTermTerminal dataChannel={dataChannel} />
+          <XTermTerminal dataChannel={dataChannel} onPrompt={(text) => setWebrtcPrompt(text)} />
         )}
 
         {/* Prompt Cards (Polling Fallback) */}
@@ -159,6 +162,7 @@ export default function App() {
 
       {/* Input */}
       <ChatInput
+        latestPrompt={webrtcPrompt || (prompts.length > 0 ? prompts[0].content : null)}
         onSend={handleSend}
         isSending={isSending && !isWebRTCConnected}
         disabled={isDisconnected}

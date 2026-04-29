@@ -54,9 +54,9 @@ remote-claude -d
 
 ## Core Features
 
-- **Live Terminal Mirroring (WebRTC + xterm.js)** - A pixel-perfect terminal mirror powered by xterm.js (the same engine behind VS Code). Cursor movements, colors, and TUI redraws render flawlessly. Join late and get the full history burst.
+- **Live Terminal Mirroring (WebRTC + xterm.js)** - A pixel-perfect terminal mirror powered by xterm.js (the same engine behind VS Code). Cursor movements, colors, and TUI redraws render flawlessly. The terminal dynamically auto-resizes to your phone's exact dimensions.
 - **Instant QR Pairing & PWA** - Scan the QR code to connect. The session persists to `localStorage`, allowing you to add the app to your iOS/Android home screen.
-- **Reliable Pause Detection** - A 4-layer hybrid detection engine automatically sends you push notifications when Claude pauses for input (e.g., approval prompts).
+- **Zero-Config Push Notifications (Deep Linked)** - A 4-layer hybrid detection engine detects when Claude pauses. Simply tap the "🔔 Alerts" button in the PWA to instantly subscribe via deep link—no copying, pasting, or Appwrite configuration required!
 - **Zero-Trust Security** - All peer-to-peer streams and Appwrite signaling payloads are secured with AES-256-GCM encryption.
 
 ## Architecture & Security
