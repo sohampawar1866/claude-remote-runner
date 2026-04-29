@@ -170,6 +170,7 @@ export function useWebRTC(sessionId, encryptionKey, isWebRTCSession) {
   return {
     isWebRTCConnected: isConnected,
     terminalOutput,
+    dataChannel: dataChannelRef.current,
     sendWebRTCMessage,
     reconnect: initWebRTC,
   };

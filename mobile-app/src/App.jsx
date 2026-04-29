@@ -2,7 +2,7 @@ import { useRemoteSession } from './hooks/useRemoteSession';
 import { useWebRTC } from './hooks/useWebRTC';
 import PromptList from './components/PromptList';
 import ChatInput from './components/ChatInput';
-import RichTerminal from './components/RichTerminal';
+import XTermTerminal from './components/XTermTerminal';
 
 /* ─── Icons ───────────────────────────────────────────────────── */
 
@@ -60,7 +60,7 @@ import { useState, useCallback } from 'react';
 export default function App() {
   const { sessionId, encryptionKey, isWebRTCSession, prompts, isDisconnected, isSending, sendRemoteResponse, disconnect } = useRemoteSession();
   
-  const { isWebRTCConnected, terminalOutput, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey, isWebRTCSession);
+  const { isWebRTCConnected, terminalOutput, dataChannel, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey, isWebRTCSession);
   const [activeTab, setActiveTab] = useState('prompts'); // 'prompts' | 'live'
   
   const handleSend = useCallback((text) => {
@@ -138,7 +138,7 @@ export default function App() {
 
         {/* Live Terminal View */}
         {activeTab === 'live' && (
-          <RichTerminal text={terminalOutput} />
+          <XTermTerminal dataChannel={dataChannel} historyData={terminalOutput} />
         )}
 
         {/* Prompt Cards */}

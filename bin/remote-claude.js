@@ -290,6 +290,13 @@ if (isBackendConfigured) {
     },
     onResize: (dims) => {
       if (options.debug) console.log(`\x1b[90m[WebRTC] Mobile requested resize: ${dims.cols}x${dims.rows}\x1b[39m`);
+      try {
+        if (dims.cols > 0 && dims.rows > 0) {
+          ptyProcess.resize(dims.cols, dims.rows);
+        }
+      } catch (err) {
+        if (options.debug) console.warn(`\x1b[33m[WebRTC] Failed to resize PTY: ${err.message}\x1b[39m`);
+      }
     },
     getBuffer: () => detector.buffer,
     ptyProcess: ptyProcess,
