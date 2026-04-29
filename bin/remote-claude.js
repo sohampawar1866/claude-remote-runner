@@ -5,7 +5,7 @@ import stripAnsi from 'strip-ansi';
 import { Command } from 'commander';
 import crypto from 'crypto';
 import { getOrGenerateConfig } from '../src/config/index.js';
-import { logPromptToAppwrite, subscribeToResponses, isBackendConfigured, pollForPairing, FRONTEND_URL } from '../src/services/appwrite.js';
+import { logPromptToAppwrite, fetchResponseFromAppwrite, isBackendConfigured, pollForPairing, FRONTEND_URL } from '../src/services/appwrite.js';
 import { sendNtfyAlert } from '../src/services/ntfy.js';
 import { startKeepAwake, stopKeepAwake } from '../src/utils/keepawake.js';
 import { PauseDetector, STATE } from '../src/detection/index.js';
@@ -372,14 +372,18 @@ function onClaudePaused(buffer) {
   sendNtfyAlert(config.ntfyTopic, 'Claude Needs Input', 'Tap here to securely view the prompt and respond.', channelId, encryptionKey, frontendUrl, isBackendConfigured);
   logPromptToAppwrite(channelId, contextLines, encryptionKey);
 
-  // Phase 2: Subscribe to responses via Appwrite Realtime instead of setInterval polling
+  // Phase 2: Poll for responses (Node SDK doesn't support Realtime WebSockets)
   if (!responseUnsubscribe) {
-    responseUnsubscribe = subscribeToResponses(channelId, encryptionKey, (responseText) => {
-      // We got a response from the mobile app!
-      ptyProcess.write(`${responseText}\r`);
-      cancelRemoteWait();
-      detector.userResponded();
-    });
+    const pollInterval = setInterval(async () => {
+      const responseText = await fetchResponseFromAppwrite(channelId, encryptionKey);
+      if (responseText) {
+        ptyProcess.write(`${responseText}\r`);
+        cancelRemoteWait();
+        detector.userResponded();
+      }
+    }, 1500);
+
+    responseUnsubscribe = () => clearInterval(pollInterval);
   }
 }
 

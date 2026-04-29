@@ -1,6 +1,7 @@
 import { PeerConnection } from 'node-datachannel';
 import qrcode from 'qrcode-terminal';
-import { databases, MESSAGES_COLLECTION_ID, DATABASE_ID, subscribeToCollection } from './appwrite.js';
+import { databases, MESSAGES_COLLECTION_ID, DATABASE_ID } from './appwrite.js';
+import { Query } from 'appwrite';
 import { encryptText, decryptText } from '../utils/crypto.js';
 
 /**
@@ -113,24 +114,39 @@ export async function createWebRTCSession(channelId, encryptionKey, frontendUrl,
         console.log(`\nOr click here: \x1b[4m${pairUrl}\x1b[24m\n`);
         console.log('\x1b[90mWaiting for mobile device to answer...\x1b[39m');
 
-        // 6. Listen for WebRTC Answer via Appwrite Realtime (Phase 2)
-        const unsubscribe = subscribeToCollection((payload) => {
-          if (payload.sessionId === channelId && payload.type === 'webrtc_answer') {
-            unsubscribe();
-            
-            // Clean up the signaling data
-            databases.deleteDocument(DATABASE_ID, MESSAGES_COLLECTION_ID, payload.$id).catch(() => {});
-            
-            const decryptedAnswerStr = decryptText(payload.content, encryptionKey);
-            if (decryptedAnswerStr) {
-              const answerSdp = JSON.parse(decryptedAnswerStr);
+        // 6. Poll for WebRTC Answer (Node SDK does not support Realtime WebSockets)
+        const checkAnswerInterval = setInterval(async () => {
+          try {
+            const answerDocs = await databases.listDocuments(
+              DATABASE_ID,
+              MESSAGES_COLLECTION_ID,
+              [
+                Query.equal('sessionId', channelId),
+                Query.equal('type', 'webrtc_answer'),
+                Query.orderDesc('$createdAt'),
+                Query.limit(1)
+              ]
+            );
+
+            if (answerDocs.documents.length > 0) {
+              clearInterval(checkAnswerInterval);
+              const payload = answerDocs.documents[0];
               
-              // 7. Set Remote Description -> this triggers the connection
-              peer.setRemoteDescription(answerSdp.sdp, answerSdp.type);
-              console.log('\x1b[90m[WebRTC] Answer received, establishing P2P tunnel...\x1b[39m');
+              // Clean up the signaling data
+              await databases.deleteDocument(DATABASE_ID, MESSAGES_COLLECTION_ID, payload.$id).catch(() => {});
+              
+              const decryptedAnswerStr = decryptText(payload.content, encryptionKey);
+              if (decryptedAnswerStr) {
+                const answerSdp = JSON.parse(decryptedAnswerStr);
+                // 7. Set Remote Description -> this triggers the connection
+                peer.setRemoteDescription(answerSdp.sdp, answerSdp.type);
+                console.log('\x1b[90m[WebRTC] Answer received, establishing P2P tunnel...\x1b[39m');
+              }
             }
+          } catch (err) {
+            // Silently ignore polling errors
           }
-        });
+        }, 1000);
       }
     });
 
