@@ -292,8 +292,13 @@ export class PauseDetector {
     const fullContent = tailLines.join('\n');
 
     if (hasPrompt) {
-      this._debugLog('_onSilence: prompt structure detected, triggering pause');
-      this._triggerPause();
+      if (this._state === STATE.BUSY) {
+        this._debugLog('_onSilence: prompt structure detected after busy state, triggering pause');
+        this._triggerPause();
+      } else {
+        this._debugLog('_onSilence: prompt structure detected but not previously busy (likely initial idle prompt). Transitioning to IDLE.');
+        this._transition(STATE.IDLE);
+      }
     } else {
       // Even without prompt structure, if output has been completely silent
       // for the threshold AND we were previously busy, this is likely a
