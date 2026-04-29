@@ -60,7 +60,7 @@ import { useState, useCallback } from 'react';
 export default function App() {
   const { sessionId, encryptionKey, isWebRTCSession, prompts, isDisconnected, isSending, sendRemoteResponse, disconnect } = useRemoteSession();
   
-  const { isWebRTCConnected, terminalOutput, dataChannel, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey, isWebRTCSession);
+  const { isWebRTCConnected, dataChannel, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey, isWebRTCSession);
   const [activeTab, setActiveTab] = useState('prompts'); // 'prompts' | 'live'
   
   const handleSend = useCallback((text) => {
@@ -138,7 +138,7 @@ export default function App() {
 
         {/* Live Terminal View */}
         {activeTab === 'live' && (
-          <XTermTerminal dataChannel={dataChannel} historyData={terminalOutput} />
+          <XTermTerminal dataChannel={dataChannel} />
         )}
 
         {/* Prompt Cards */}

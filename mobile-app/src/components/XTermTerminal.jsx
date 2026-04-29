@@ -3,15 +3,21 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-export default function XTermTerminal({ dataChannel, historyData }) {
+export default function XTermTerminal({ dataChannel }) {
   const terminalRef = useRef(null);
   const xtermRef = useRef(null);
   const fitAddonRef = useRef(null);
+  const dataChannelRef = useRef(dataChannel);
 
+  // Keep ref in sync so resize handler always has the latest channel
+  useEffect(() => {
+    dataChannelRef.current = dataChannel;
+  }, [dataChannel]);
+
+  // Initialize xterm.js once on mount
   useEffect(() => {
     if (!terminalRef.current) return;
 
-    // Initialize xterm.js
     const term = new Terminal({
       cursorBlink: true,
       theme: {
@@ -32,48 +38,50 @@ export default function XTermTerminal({ dataChannel, historyData }) {
         brightBlue: '#79c0ff',
         brightMagenta: '#d2a8ff',
         brightCyan: '#56d4dd',
-        brightWhite: '#ffffff'
+        brightWhite: '#ffffff',
       },
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,
       lineHeight: 1.2,
-      disableStdin: true, // We handle input separately via our ChatInput
+      disableStdin: true,
+      scrollback: 5000,
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
-    
+
     term.open(terminalRef.current);
     fitAddon.fit();
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Write any initial history we already got
-    if (historyData) {
-      term.write(historyData);
-    }
-
     const handleResize = () => {
       fitAddon.fit();
-      if (dataChannel && dataChannel.readyState === 'open') {
-        dataChannel.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      const ch = dataChannelRef.current;
+      if (ch && ch.readyState === 'open') {
+        ch.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
       }
     };
 
+    const handleOrientation = () => setTimeout(handleResize, 200);
+
     window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', () => setTimeout(handleResize, 200));
+    window.addEventListener('orientationchange', handleOrientation);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleOrientation);
       term.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
     };
-  }, []); // Run once on mount
+  }, []);
 
-  // Subscribe to dataChannel messages
+  // Subscribe to dataChannel messages — re-runs when dataChannel changes
   useEffect(() => {
     if (!dataChannel) return;
-    
+
     const handleMessage = (e) => {
       try {
         const packet = JSON.parse(e.data);
@@ -81,23 +89,28 @@ export default function XTermTerminal({ dataChannel, historyData }) {
           xtermRef.current?.write(packet.data);
         }
       } catch {
-        // Fallback for raw text
         xtermRef.current?.write(e.data);
       }
     };
 
     dataChannel.addEventListener('message', handleMessage);
-    
+
+    // Send initial resize so CLI knows our dimensions
+    if (dataChannel.readyState === 'open' && xtermRef.current) {
+      const term = xtermRef.current;
+      dataChannel.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    }
+
     return () => {
       dataChannel.removeEventListener('message', handleMessage);
     };
   }, [dataChannel]);
 
   return (
-    <div 
-      ref={terminalRef} 
-      className="xterm-container" 
-      style={{ width: '100%', height: '100%', overflow: 'hidden', padding: '8px' }} 
+    <div
+      ref={terminalRef}
+      className="xterm-container"
+      style={{ width: '100%', height: '100%', overflow: 'hidden', padding: '8px' }}
     />
   );
 }
