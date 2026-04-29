@@ -1,7 +1,8 @@
 // src/services/ntfy.js
 
 export async function sendNtfyAlert(topic, title, message, channelId, encryptionKey, frontendUrl, isBackendConfigured) {
-  if (!isBackendConfigured) return;
+  // Notifications are now decoupled from Appwrite backend config
+  // Always try to send the alert to ntfy.sh
   try {
     await fetch(`https://ntfy.sh/${topic}`, {
       method: 'POST',

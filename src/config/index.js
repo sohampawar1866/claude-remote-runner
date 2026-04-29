@@ -30,9 +30,9 @@ export function getOrGenerateConfig() {
   // Derive ntfy topic from token so it's impossible to guess
   config.ntfyTopic = crypto.createHash('sha256').update(config.pairingToken).digest('hex').substring(0, 32);
 
-  // DEV MODE ONLY: Print the ntfy url so the developer can test push notifications immediately
-  console.log(`\x1b[33m[DEV] Subscribe to this ntfy topic to see push alerts:\x1b[39m`);
-  console.log(`\x1b[33mhttps://ntfy.sh/${config.ntfyTopic}\x1b[39m\n`);
+  // Print the ntfy url so the user can get push notifications anywhere
+  console.log(`\x1b[32m[Push Notifications]\x1b[39m Subscribe to this URL on your phone to get alerts when Claude pauses:`);
+  console.log(`\x1b[36mhttps://ntfy.sh/${config.ntfyTopic}\x1b[39m\n`);
 
   return config;
 }

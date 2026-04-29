@@ -5,11 +5,19 @@ function formatTime(dateStr) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// Basic ANSI stripping regex to clean up prompt cards
+function stripAnsi(str) {
+  if (!str) return '';
+  return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+}
+
 function PromptCard({ prompt, index }) {
   const [copied, setCopied] = useState(false);
 
+  const cleanContent = stripAnsi(prompt.content);
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(prompt.content).then(() => {
+    navigator.clipboard.writeText(cleanContent).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -29,7 +37,7 @@ function PromptCard({ prompt, index }) {
       </div>
 
       <div className="prompt-body">
-        {prompt.content}
+        {cleanContent}
       </div>
 
       <div className="prompt-footer">

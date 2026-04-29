@@ -61,7 +61,10 @@ export default function App() {
   const { sessionId, encryptionKey, isWebRTCSession, prompts, isDisconnected, isSending, sendRemoteResponse, disconnect } = useRemoteSession();
   
   const { isWebRTCConnected, dataChannel, sendWebRTCMessage } = useWebRTC(sessionId, encryptionKey, isWebRTCSession);
-  const [activeTab, setActiveTab] = useState('prompts'); // 'prompts' | 'live'
+  
+  // Auto-switch to live view when WebRTC connects.
+  // Fall back to polling (Prompts) when disconnected.
+  const showLiveView = isWebRTCConnected;
   
   const handleSend = useCallback((text) => {
     if (isWebRTCConnected) {
@@ -113,7 +116,7 @@ export default function App() {
       {/* Content */}
       <div className="content-area">
         {/* Waiting / empty state */}
-        {!hasPrompts && !isDisconnected && activeTab === 'prompts' && (
+        {!hasPrompts && !isDisconnected && !showLiveView && (
           <div className="empty-state">
             <div className="empty-state-icon">
               <TerminalIcon size={30} />
@@ -128,21 +131,13 @@ export default function App() {
           </div>
         )}
 
-        {/* Tabs for WebRTC mode */}
-        {isWebRTCSession && (
-          <div className="tabs">
-            <button className={`tab ${activeTab === 'prompts' ? 'active' : ''}`} onClick={() => setActiveTab('prompts')}>Prompts</button>
-            <button className={`tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>Live View</button>
-          </div>
-        )}
-
         {/* Live Terminal View */}
-        {activeTab === 'live' && (
+        {showLiveView && (
           <XTermTerminal dataChannel={dataChannel} />
         )}
 
-        {/* Prompt Cards */}
-        {activeTab === 'prompts' && <PromptList prompts={prompts} />}
+        {/* Prompt Cards (Polling Fallback) */}
+        {!showLiveView && <PromptList prompts={prompts} />}
 
         {/* Disconnected Banner */}
         {isDisconnected && (

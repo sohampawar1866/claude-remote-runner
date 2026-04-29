@@ -41,7 +41,7 @@ export default function XTermTerminal({ dataChannel }) {
         brightWhite: '#ffffff',
       },
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
+      fontSize: 15,
       lineHeight: 1.2,
       disableStdin: true,
       scrollback: 5000,
@@ -51,7 +51,18 @@ export default function XTermTerminal({ dataChannel }) {
     term.loadAddon(fitAddon);
 
     term.open(terminalRef.current);
+    
+    // Fit immediately, then again after a short delay to account for any flex layout settling
     fitAddon.fit();
+    setTimeout(() => {
+      if (fitAddonRef.current && xtermRef.current) {
+        fitAddonRef.current.fit();
+        const ch = dataChannelRef.current;
+        if (ch && ch.readyState === 'open') {
+          ch.send(JSON.stringify({ type: 'resize', cols: xtermRef.current.cols, rows: xtermRef.current.rows }));
+        }
+      }
+    }, 100);
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
