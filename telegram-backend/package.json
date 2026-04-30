@@ -1,0 +1,21 @@
+{
+  "name": "telegram-backend",
+  "version": "1.0.0",
+  "description": "Telegram Bot backend for Remote Claude",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": ["telegram", "claude", "remote"],
+  "author": "sohampawar1866",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "node-appwrite": "^24.0.0",
+    "node-telegram-bot-api": "^0.67.0"
+  }
+}

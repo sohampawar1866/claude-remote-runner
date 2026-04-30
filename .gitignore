@@ -1,10 +1,12 @@
 # Dependencies
 node_modules/
 mobile-app/node_modules/
+telegram-backend/node_modules/
 
 # Environment variables (contain secrets)
 .env
 mobile-app/.env
+telegram-backend/.env
 
 # Build output
 mobile-app/dist/

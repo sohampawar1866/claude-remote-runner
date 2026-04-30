@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchActivePrompts, subscribeToMessages, sendResponse, sendReadyMessage } from '../services/appwrite';
 
+import WebApp from '@twa-dev/sdk';
+
 const STORAGE_KEYS = {
   SESSION: 'remote-claude-session',
   KEY: 'remote-claude-key',
@@ -9,16 +11,30 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Reads session credentials from URL params first, then falls back to localStorage.
- * This ensures the PWA works correctly when launched from the Home Screen (iOS strips URL params).
+ * Reads session credentials from Telegram Web App context first, then falls back to URL/localStorage.
  */
 function resolveCredentials() {
-  const params = new URLSearchParams(window.location.search);
+  let urlId = null;
+  let urlKey = null;
+  let urlWebRTC = true; // Always true for TMA since we only use it for terminal
+  let urlNtfy = null;
 
-  const urlId = params.get('c') || params.get('sessionId');
-  const urlKey = params.get('k');
-  const urlWebRTC = params.get('t') === 'webrtc';
-  const urlNtfy = params.get('n');
+  if (WebApp.initDataUnsafe && WebApp.initDataUnsafe.start_param) {
+    const payload = WebApp.initDataUnsafe.start_param;
+    if (payload.includes('_key_')) {
+      [urlId, urlKey] = payload.split('_key_');
+    } else {
+      urlId = payload;
+    }
+    // Expand Telegram Mini App
+    WebApp.expand();
+  } else {
+    const params = new URLSearchParams(window.location.search);
+    urlId = params.get('c') || params.get('sessionId');
+    urlKey = params.get('k');
+    urlWebRTC = params.get('t') === 'webrtc' || true;
+    urlNtfy = params.get('n');
+  }
 
   // If the URL contains fresh credentials, persist them immediately
   if (urlId && urlKey) {

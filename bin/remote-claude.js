@@ -6,7 +6,6 @@ import { Command } from 'commander';
 import crypto from 'crypto';
 import { getOrGenerateConfig } from '../src/config/index.js';
 import { logPromptToAppwrite, fetchResponseFromAppwrite, isBackendConfigured, pollForPairing, FRONTEND_URL } from '../src/services/appwrite.js';
-import { sendNtfyAlert } from '../src/services/ntfy.js';
 import { startKeepAwake, stopKeepAwake } from '../src/utils/keepawake.js';
 import { PauseDetector, STATE } from '../src/detection/index.js';
 import { installHook, watchStateFile } from '../src/detection/hookSetup.js';
@@ -167,6 +166,8 @@ function startRunner(args, options) {
 const channelId = crypto.randomUUID();
 const encryptionKey = crypto.randomBytes(32).toString('hex');
 const frontendUrl = FRONTEND_URL;
+const telegramBackendUrl = process.env.TELEGRAM_BACKEND_URL || 'http://localhost:3000';
+const botUsername = process.env.TELEGRAM_BOT_USERNAME || 'RemoteClaudeBot';
 
 // Keep-awake: prevent system sleep during long agent tasks
 if (options.keepAwake) {
@@ -174,8 +175,8 @@ if (options.keepAwake) {
   console.log('\x1b[33m[remote-claude] Keep-awake enabled - system will not sleep.\x1b[39m');
 }
 
-console.log('\x1b[36m[remote-claude] Active Session URL:\x1b[39m');
-const sessionUrl = `${frontendUrl}/?c=${channelId}&k=${encryptionKey}&n=${config.ntfyTopic}`;
+console.log('\x1b[36m[remote-claude] Active Telegram Session Link:\x1b[39m');
+const sessionUrl = `https://t.me/${botUsername}?start=${channelId}_key_${encryptionKey}`;
 console.log(`\x1b[36m${sessionUrl}\x1b[39m\n`);
 
 qrcode.generate(sessionUrl, { small: true }, (code) => {
@@ -378,9 +379,17 @@ function onClaudePaused(buffer) {
   const lines = cleanBuffer.split('\n');
   const contextLines = lines.slice(Math.max(lines.length - 8, 0)).join('\n');
 
-  // Push notification and DB fallback prompt
-  sendNtfyAlert(config.ntfyTopic, 'Claude Needs Input', 'Tap here to securely view the prompt and respond.', channelId, encryptionKey, frontendUrl, isBackendConfigured);
+  // Save prompt to Appwrite
   logPromptToAppwrite(channelId, contextLines, encryptionKey);
+
+  // Notify Telegram backend
+  fetch(`${telegramBackendUrl}/notify-pause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: channelId, context: contextLines })
+  }).catch(err => {
+    if (options.debug) console.warn('Failed to notify Telegram backend:', err.message);
+  });
 
   // Phase 2: Poll for responses (Node SDK doesn't support Realtime WebSockets)
   if (!responseUnsubscribe) {
@@ -413,6 +422,17 @@ ptyProcess.onExit(async ({ exitCode }) => {
   if (hookCleanup) hookCleanup();
   if (hookWatchCleanup) hookWatchCleanup();
   await logPromptToAppwrite(channelId, '[remote-claude] Process exited.', encryptionKey, 'disconnect');
+  
+  try {
+    await fetch(`${telegramBackendUrl}/notify-end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: channelId, message: `Session completed with code ${exitCode}`, error: exitCode !== 0 })
+    });
+  } catch (e) {
+    // Ignore fetch errors on exit
+  }
+
   process.exit(exitCode);
 });
 
