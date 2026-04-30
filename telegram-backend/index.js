@@ -4,8 +4,11 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { Client, Databases, ID } from 'node-appwrite';
 import crypto from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config({ path: '../.env' }); // Use the parent .env
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../.env') }); // Resolve relative to this file, not CWD
 
 const app = express();
 app.use(cors());
@@ -26,6 +29,7 @@ const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID;
 const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY; // We'll need a server API key
 const DATABASE_ID = process.env.APPWRITE_DATABASE_ID;
 const MESSAGES_COLLECTION_ID = process.env.APPWRITE_COLLECTION_ID;
+const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'RemoteClaudeBot';
 
 const client = new Client()
     .setEndpoint(APPWRITE_ENDPOINT)
@@ -60,18 +64,19 @@ function encryptText(text, keyHex) {
 // Telegram command handling
 bot.onText(/\/start (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
-    const payload = match[1]; // sess_123_key_456
-    
-    let sessionId, encryptionKey;
-    if (payload.includes('_key_')) {
-        [sessionId, encryptionKey] = payload.split('_key_');
-    } else {
-        sessionId = payload;
+    const sessionId = match[1]; // Just the sessionId now (pre-registered via /register-session)
+
+    // Look up pre-registered session to get the encryption key
+    const existing = sessions.get(sessionId);
+    if (!existing) {
+        bot.sendMessage(chatId, '❌ Session not found. Make sure remote-claude is running.');
+        return;
     }
 
-    sessions.set(sessionId, { chatId, encryptionKey });
+    // Update with the Telegram chat_id
+    sessions.set(sessionId, { ...existing, chatId });
 
-    bot.sendMessage(chatId, `🔗 Connected to session ${sessionId}. Working in backend-repo...`);
+    bot.sendMessage(chatId, `🔗 Connected to session. Working...`);
     
     // Write 'ready' to Appwrite so CLI knows we paired
     try {
@@ -89,6 +94,17 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
     } catch (e) {
         console.error('Failed to notify CLI of pairing', e);
     }
+});
+
+// Pre-registration endpoint: CLI calls this to store sessionId + encryptionKey
+// BEFORE generating the deep link
+app.post('/register-session', (req, res) => {
+    const { sessionId, encryptionKey } = req.body;
+    if (!sessionId) {
+        return res.status(400).json({ error: 'sessionId is required' });
+    }
+    sessions.set(sessionId, { chatId: null, encryptionKey: encryptionKey || null });
+    res.json({ success: true });
 });
 
 // Callback queries (Button taps)
@@ -125,9 +141,14 @@ bot.on('callback_query', async (query) => {
     else if (action === 'wait') responseText = 'wait';
 
     // Push back to CLI via Appwrite
-    const safeContent = session.encryptionKey 
+    let safeContent = session.encryptionKey 
         ? encryptText(responseText, session.encryptionKey) 
         : responseText;
+    
+    if (safeContent === null) {
+        bot.sendMessage(chatId, '❌ Encryption failed. Could not send response.');
+        return;
+    }
 
     try {
         await databases.createDocument(
@@ -163,8 +184,7 @@ app.post('/notify-pause', (req, res) => {
                     ],
                     [
                         { text: '⏸️ Wait 10 min', callback_data: JSON.stringify({ s: sessionId, a: 'wait' }) },
-                        // The terminal URL will be handled later, for now just a placeholder
-                        { text: '🖥️ Open Terminal', url: `https://t.me/RemoteClaudeBot/terminal?startapp=${sessionId}` }
+                        { text: '🖥️ Open Terminal', url: `https://t.me/${BOT_USERNAME}/terminal?startapp=${sessionId}_key_${session.encryptionKey || ''}` }
                     ]
                 ]
             }

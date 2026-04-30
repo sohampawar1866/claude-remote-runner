@@ -175,8 +175,20 @@ if (options.keepAwake) {
   console.log('\x1b[33m[remote-claude] Keep-awake enabled - system will not sleep.\x1b[39m');
 }
 
+// Pre-register session with the Telegram backend so /start can look up the key
+fetch(`${telegramBackendUrl}/register-session`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ sessionId: channelId, encryptionKey })
+}).then(res => {
+  if (!res.ok) console.warn('\x1b[33m[remote-claude] Warning: Failed to register session with Telegram backend.\x1b[39m');
+}).catch(() => {
+  console.warn('\x1b[33m[remote-claude] Warning: Telegram backend not reachable. Bot pairing will not work.\x1b[39m');
+});
+
+// Deep link only carries the sessionId (36 chars, within Telegram's 64-char /start limit)
 console.log('\x1b[36m[remote-claude] Active Telegram Session Link:\x1b[39m');
-const sessionUrl = `https://t.me/${botUsername}?start=${channelId}_key_${encryptionKey}`;
+const sessionUrl = `https://t.me/${botUsername}?start=${channelId}`;
 console.log(`\x1b[36m${sessionUrl}\x1b[39m\n`);
 
 qrcode.generate(sessionUrl, { small: true }, (code) => {

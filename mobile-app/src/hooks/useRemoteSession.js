@@ -32,7 +32,7 @@ function resolveCredentials() {
     const params = new URLSearchParams(window.location.search);
     urlId = params.get('c') || params.get('sessionId');
     urlKey = params.get('k');
-    urlWebRTC = params.get('t') === 'webrtc' || true;
+    urlWebRTC = params.get('t') === 'webrtc';
     urlNtfy = params.get('n');
   }
 
